@@ -6,6 +6,7 @@ import Board from "./components/Board.jsx";
 export default function App() {
   const mode = useStore((s) => s.mode);
   const setMode = useStore((s) => s.setMode);
+  const zoom = useStore((s) => s.camera.zoom);
 
   return (
     <div className="app">
@@ -19,6 +20,7 @@ export default function App() {
             Interact (I)
           </button>
         </div>
+        <span className="zoom-level">{Math.round(zoom * 100)}%</span>
       </header>
 
       <Board />

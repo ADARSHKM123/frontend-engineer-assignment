@@ -44,10 +44,17 @@ body {
   background: var(--panel);
   cursor: pointer;
 }
+.zoom-level { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+
 .mode-toggle button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 /* Board: the visible area. Nothing scrolls; the camera moves the world instead. */
-.board { position: relative; overflow: hidden; min-width: 0; min-height: 0; }
+/* user-select: none stops a drag from text-selecting the board (and tinting the iframes). */
+.board { position: relative; overflow: hidden; min-width: 0; min-height: 0; cursor: grab; touch-action: none; user-select: none; }
+
+/* While dragging, iframes ignore the pointer so they can't swallow the drag. */
+.board.is-panning { cursor: grabbing; }
+.board.is-panning iframe { pointer-events: none; }
 
 .board-message {
   display: flex;
@@ -72,11 +79,24 @@ body {
   gap: 160px 120px;
 }
 
-/* Sized in world pixels, so it reads well at the starting 25% zoom.
-   It will be made zoom-independent together with pan/zoom. */
-.preview-name { font-size: 40px; font-weight: 600; margin-bottom: 16px; color: var(--text); }
+.preview { position: relative; }
+
+/* The name sits just above the frame. The world is scaled by --zoom, so dividing
+   by --zoom cancels that out: the name is 12px on screen at every zoom level.
+   It is positioned absolutely so its changing size never moves the frames. */
+.preview-name {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  padding-bottom: calc(6px / var(--zoom));
+  font-size: calc(12px / var(--zoom));
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text);
+}
 
 .preview-frame {
+  cursor: default;
   width: 1280px;
   height: 800px;
   background: #fff;

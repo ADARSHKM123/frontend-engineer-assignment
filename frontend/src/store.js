@@ -17,6 +17,10 @@ import { report } from "../report.js";
 // something the UI renders; it only lets us cancel the previous request.
 let screensRequest = null;
 
+// Zoom limits from R1.3: 25% to 400%.
+export const MIN_ZOOM = 0.25;
+export const MAX_ZOOM = 4;
+
 export const useStore = create((set) => ({
   // "select" or "interact" (R1.5)
   mode: "select",
@@ -26,7 +30,28 @@ export const useStore = create((set) => ({
   screensStatus: "loading",
   screensError: null,
 
+  // Board camera (R1.2, R1.3). A board point (bx, by) appears on screen at
+  //   x = camera.x + bx * camera.zoom,  y = camera.y + by * camera.zoom
+  // measured from the board's top-left corner.
+  camera: { x: 40, y: 60, zoom: MIN_ZOOM },
+
   setMode: (mode) => set({ mode }),
+
+  // Move the board by (dx, dy) screen pixels (R1.2).
+  panBy: (dx, dy) =>
+    set((s) => ({ camera: { ...s.camera, x: s.camera.x + dx, y: s.camera.y + dy } })),
+
+  // Zoom by `factor`, keeping the board point under the pointer (px, py) still (R1.3).
+  zoomAt: (px, py, factor) =>
+    set((s) => {
+      const { x, y, zoom } = s.camera;
+      const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
+      // The board point under the pointer, before zooming...
+      const bx = (px - x) / zoom;
+      const by = (py - y) / zoom;
+      // ...must still be under the pointer after zooming.
+      return { camera: { x: px - bx * nextZoom, y: py - by * nextZoom, zoom: nextZoom } };
+    }),
 
   // Loads GET /screens. Also used by the board's Retry button.
   loadScreens: async () => {
