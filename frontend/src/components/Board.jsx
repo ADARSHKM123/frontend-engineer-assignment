@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store.js";
-import { PAGES_ORIGIN } from "../config.js";
+import { onAgentMessage } from "../bridge.js";
 import Preview from "./Preview.jsx";
 
 // How fast the wheel zooms. One mouse-wheel notch (deltaY ≈ 100) zooms about 18%.
@@ -57,32 +57,25 @@ export default function Board() {
   }, [status]); // the board element is only rendered once status is "ready"
 
   // Ctrl/Cmd + wheel over a preview arrives from that page's agent script (R1.3).
-  useEffect(() => {
-    function onMessage(event) {
-      if (event.origin !== PAGES_ORIGIN) return; // only trust the preview pages
-      if (event.data?.source !== "figr-agent" || event.data.type !== "zoom-wheel") return;
+  // `iframe` is the preview that sent it, so we know where that page sits on screen.
+  useEffect(
+    () =>
+      onAgentMessage("zoom-wheel", (data, iframe) => {
+        const board = boardRef.current;
+        if (!board) return;
 
-      // Find which preview sent it, so we know where that page sits on screen.
-      const iframe = [...document.querySelectorAll(".preview iframe")].find(
-        (frame) => frame.contentWindow === event.source,
-      );
-      const board = boardRef.current;
-      if (!iframe || !board) return;
+        // The page reports the pointer in page pixels. On screen, the page is scaled by zoom.
+        const { zoom } = useStore.getState().camera;
+        const frameRect = iframe.getBoundingClientRect();
+        const boardRect = board.getBoundingClientRect();
+        const px = frameRect.left - boardRect.left + data.x * zoom;
+        const py = frameRect.top - boardRect.top + data.y * zoom;
+        const dy = toPixels(data.deltaY, data.deltaMode);
 
-      // The page reports the pointer in page pixels. On screen, the page is scaled by zoom.
-      const { zoom } = useStore.getState().camera;
-      const frameRect = iframe.getBoundingClientRect();
-      const boardRect = board.getBoundingClientRect();
-      const px = frameRect.left - boardRect.left + event.data.x * zoom;
-      const py = frameRect.top - boardRect.top + event.data.y * zoom;
-      const dy = toPixels(event.data.deltaY, event.data.deltaMode);
-
-      useStore.getState().zoomAt(px, py, Math.exp(-dy * ZOOM_SPEED));
-    }
-
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, []);
+        useStore.getState().zoomAt(px, py, Math.exp(-dy * ZOOM_SPEED));
+      }),
+    [],
+  );
 
   // Drag on empty board space pans (R1.2). Pointer capture keeps the drag going
   // even when the pointer moves over an iframe or outside the window.
