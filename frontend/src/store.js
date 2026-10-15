@@ -35,7 +35,20 @@ export const useStore = create((set) => ({
   // measured from the board's top-left corner.
   camera: { x: 40, y: 60, zoom: MIN_ZOOM },
 
-  setMode: (mode) => set({ mode }),
+  // The one hovered element on the whole board (R2.2), or null.
+  // { screenId, name, rect: { x, y, width, height } }
+  // rect is in the page's own pixels, relative to the preview's top-left corner.
+  hover: null,
+
+  // Changing mode also clears the hover: Interact mode draws no outlines (R1.5).
+  setMode: (mode) => set({ mode, hover: null }),
+
+  setHover: (screenId, { name, rect }) => set({ hover: { screenId, name, rect } }),
+
+  // With a screenId: clear only if that preview owns the hover. This matters when
+  // the pointer moves from preview A to B and A's "left" message arrives after B's hover.
+  clearHover: (screenId) =>
+    set((s) => (screenId === undefined || s.hover?.screenId === screenId ? { hover: null } : {})),
 
   // Move the board by (dx, dy) screen pixels (R1.2).
   panBy: (dx, dy) =>

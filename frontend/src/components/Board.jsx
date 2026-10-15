@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "../store.js";
 import { onAgentMessage } from "../bridge.js";
+import { cancelHover } from "../hoverSync.js";
 import Preview from "./Preview.jsx";
 
 // How fast the wheel zooms. One mouse-wheel notch (deltaY ≈ 100) zooms about 18%.
@@ -40,6 +41,7 @@ export default function Board() {
 
     function onWheel(event) {
       event.preventDefault();
+      cancelHover(); // panning or zooming clears the hover (R2.3)
       const { panBy, zoomAt } = useStore.getState();
       const dx = toPixels(event.deltaX, event.deltaMode);
       const dy = toPixels(event.deltaY, event.deltaMode);
@@ -63,6 +65,7 @@ export default function Board() {
       onAgentMessage("zoom-wheel", (data, iframe) => {
         const board = boardRef.current;
         if (!board) return;
+        cancelHover(); // zooming clears the hover (R2.3)
 
         // The page reports the pointer in page pixels. On screen, the page is scaled by zoom.
         const { zoom } = useStore.getState().camera;
@@ -81,6 +84,7 @@ export default function Board() {
   // even when the pointer moves over an iframe or outside the window.
   function onPointerDown(event) {
     if (event.button !== 0) return;
+    cancelHover(); // panning clears the hover (R2.3)
     event.currentTarget.setPointerCapture(event.pointerId);
     setPanning(true);
   }

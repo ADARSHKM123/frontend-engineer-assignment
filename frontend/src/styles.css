@@ -5,6 +5,7 @@
   --text: #18181b;
   --muted: #71717a;
   --accent: #2563eb;
+  --hover: #0d99ff;
 }
 
 * { box-sizing: border-box; }
@@ -95,7 +96,10 @@ body {
   color: var(--text);
 }
 
+/* position: relative so outlines can be placed inside it with page coordinates.
+   overflow: hidden clips outlines and labels to the preview's edges (R3.4). */
 .preview-frame {
+  position: relative;
   cursor: default;
   width: 1280px;
   height: 800px;
@@ -104,6 +108,30 @@ body {
   overflow: hidden;
 }
 .preview-frame iframe { display: block; border: 0; }
+
+/* ---- Outlines (R2.1, R3.1, R3.4) ----
+   Outlines live inside the scaled world, so every on-screen size is divided by
+   --zoom: a 1px line is 1px on screen at 25% and at 400%.
+   pointer-events: none lets the pointer pass through to the page underneath. */
+.outline {
+  position: absolute;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 calc(var(--outline-width) / var(--zoom)) var(--outline-color);
+}
+.outline-hover { --outline-width: 1px; --outline-color: var(--hover); }
+
+.outline-label {
+  position: absolute;
+  height: calc(16px / var(--zoom)); /* 16px = LABEL_HEIGHT in Outline.jsx */
+  padding: 0 calc(4px / var(--zoom));
+  font-size: calc(11px / var(--zoom));
+  line-height: calc(16px / var(--zoom));
+  white-space: nowrap;
+  color: #fff;
+  background: var(--outline-color);
+}
+.outline-label.above { bottom: 100%; }
+.outline-label.below { top: 100%; }
 
 .sidebar {
   display: grid;
