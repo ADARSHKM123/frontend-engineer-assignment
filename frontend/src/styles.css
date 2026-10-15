@@ -6,6 +6,7 @@
   --muted: #71717a;
   --accent: #2563eb;
   --hover: #0d99ff;
+  --selected: #7c3aed;
 }
 
 * { box-sizing: border-box; }
@@ -109,6 +110,9 @@ body {
 }
 .preview-frame iframe { display: block; border: 0; }
 
+/* The active preview (last clicked in Select mode) gets an accent ring, 2px on screen. */
+.preview-frame.is-active { box-shadow: 0 0 0 calc(2px / var(--zoom)) var(--accent); }
+
 /* ---- Outlines (R2.1, R3.1, R3.4) ----
    Outlines live inside the scaled world, so every on-screen size is divided by
    --zoom: a 1px line is 1px on screen at 25% and at 400%.
@@ -119,6 +123,7 @@ body {
   box-shadow: inset 0 0 0 calc(var(--outline-width) / var(--zoom)) var(--outline-color);
 }
 .outline-hover { --outline-width: 1px; --outline-color: var(--hover); }
+.outline-selected { --outline-width: 2px; --outline-color: var(--selected); }
 
 .outline-label {
   position: absolute;

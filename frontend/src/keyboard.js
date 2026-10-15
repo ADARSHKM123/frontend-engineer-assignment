@@ -18,13 +18,19 @@ function isTyping(element) {
 function handleShortcut({ key, ctrlKey, metaKey, altKey }) {
   if (ctrlKey || metaKey || altKey) return false; // leave Ctrl+C, Cmd+R, etc. alone
 
-  const { setMode } = useStore.getState();
+  const { mode, setMode, clearSelection } = useStore.getState();
   switch (key.toLowerCase()) {
     case "v":
       setMode("select"); // R1.5
       return true;
     case "i":
       setMode("interact"); // R1.5
+      return true;
+    case "escape":
+      // Only in Select mode: in Interact mode the selection is hidden, and the
+      // page itself may use Escape (e.g. to close a menu).
+      if (mode !== "select") return false;
+      clearSelection(); // R3.3
       return true;
     default:
       return false;

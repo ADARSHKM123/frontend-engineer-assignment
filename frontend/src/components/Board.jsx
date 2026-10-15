@@ -82,16 +82,26 @@ export default function Board() {
 
   // Drag on empty board space pans (R1.2). Pointer capture keeps the drag going
   // even when the pointer moves over an iframe or outside the window.
+  // A press that barely moves is a click on empty space instead: it clears the selection (R3.3).
+  const dragDistance = useRef(0);
+
   function onPointerDown(event) {
     if (event.button !== 0) return;
     cancelHover(); // panning clears the hover (R2.3)
     event.currentTarget.setPointerCapture(event.pointerId);
+    dragDistance.current = 0;
     setPanning(true);
   }
 
   function onPointerMove(event) {
     if (!panning) return;
+    dragDistance.current += Math.abs(event.movementX) + Math.abs(event.movementY);
     useStore.getState().panBy(event.movementX, event.movementY);
+  }
+
+  function onPointerUp() {
+    if (panning && dragDistance.current < 4) useStore.getState().clearSelection();
+    setPanning(false);
   }
 
   function stopPanning() {
@@ -118,7 +128,7 @@ export default function Board() {
       className={panning ? "board is-panning" : "board"}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={stopPanning}
+      onPointerUp={onPointerUp}
       onPointerCancel={stopPanning}
     >
       {/* The "world": everything on the board moves together when the camera changes.

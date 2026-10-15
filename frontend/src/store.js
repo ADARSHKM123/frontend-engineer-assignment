@@ -36,14 +36,62 @@ export const useStore = create((set) => ({
   camera: { x: 40, y: 60, zoom: MIN_ZOOM },
 
   // The one hovered element on the whole board (R2.2), or null.
-  // { screenId, name, rect: { x, y, width, height } }
+  // { screenId, id, name, rect: { x, y, width, height } }
   // rect is in the page's own pixels, relative to the preview's top-left corner.
+  // id is given by the page's agent; the host never holds the page's DOM nodes.
   hover: null,
+
+  // The preview the user last clicked in Select mode (Terms: "Active preview").
+  activeScreenId: null,
+
+  // Selection (R3). All selected elements are in one preview (R3.2).
+  // ids are in the order they were selected: the last one is the most recent (R3.5).
+  selection: { screenId: null, ids: [] },
+
+  // Where the selected elements are right now, reported by the agent:
+  // [{ id, name, rect, hidden }]. hidden = scrolled out of a scroll area in the page.
+  // Elements that no longer exist are simply missing.
+  selectionBoxes: [],
 
   // Changing mode also clears the hover: Interact mode draws no outlines (R1.5).
   setMode: (mode) => set({ mode, hover: null }),
 
-  setHover: (screenId, { name, rect }) => set({ hover: { screenId, name, rect } }),
+  setHover: (screenId, { id, name, rect }) => set({ hover: { screenId, id, name, rect } }),
+
+  // A click in a preview in Select mode (R3.1, R3.2, R3.3).
+  // id is the clicked element, or null when the page background was clicked.
+  pickElement: (screenId, id, shiftKey) =>
+    set((s) => {
+      const sameScreen = s.selection.screenId === screenId;
+
+      let ids;
+      if (id === null) {
+        // Background: a plain click clears (R3.3); Shift + click on background keeps the selection.
+        ids = shiftKey && sameScreen ? s.selection.ids : [];
+      } else if (shiftKey && sameScreen) {
+        // Shift + click in the same preview: add or remove (R3.2).
+        ids = s.selection.ids.includes(id)
+          ? s.selection.ids.filter((x) => x !== id)
+          : [...s.selection.ids, id];
+      } else {
+        // Plain click, or Shift + click in a different preview: replace (R3.1, R3.2).
+        ids = [id];
+      }
+
+      return {
+        activeScreenId: screenId,
+        selection: { screenId: ids.length ? screenId : null, ids },
+        // Keep boxes we already know for elements still selected; new ones arrive from the agent.
+        selectionBoxes: sameScreen ? s.selectionBoxes.filter((b) => ids.includes(b.id)) : [],
+      };
+    }),
+
+  // Escape, clicking empty board space, or the page navigating (R3.3, R3.8).
+  clearSelection: () => set({ selection: { screenId: null, ids: [] }, selectionBoxes: [] }),
+
+  // New positions from the agent. Ignored if they belong to an older selection.
+  setSelectionBoxes: (screenId, boxes) =>
+    set((s) => (s.selection.screenId === screenId ? { selectionBoxes: boxes } : {})),
 
   // With a screenId: clear only if that preview owns the hover. This matters when
   // the pointer moves from preview A to B and A's "left" message arrives after B's hover.
