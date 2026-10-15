@@ -8,15 +8,15 @@ import { PAGES_ORIGIN } from "./config.js";
 //
 // Every incoming message is checked here, once, before any handler sees it.
 
-const handlers = {}; // message type -> function(data, iframe)
+const handlers = {}; // message type -> Set of functions(data, iframe)
 
-// Register the function that handles one message type from the pages.
+// Register a function that handles one message type from the pages.
+// Several features may listen to the same type (e.g. "ready").
 // Returns a function that unregisters it (handy as a useEffect cleanup).
 export function onAgentMessage(type, handler) {
-  handlers[type] = handler;
-  return () => {
-    if (handlers[type] === handler) delete handlers[type];
-  };
+  handlers[type] ??= new Set();
+  handlers[type].add(handler);
+  return () => handlers[type].delete(handler);
 }
 
 // Find the preview iframe whose page sent a message.
@@ -26,6 +26,11 @@ function findIframe(sourceWindow) {
   );
 }
 
+// Find a preview iframe by its screen id (set as data-screen-id in Preview.jsx).
+export function findIframeByScreenId(screenId) {
+  return document.querySelector(`.preview iframe[data-screen-id="${screenId}"]`);
+}
+
 window.addEventListener("message", (event) => {
   if (event.origin !== PAGES_ORIGIN) return; // only trust the preview pages
   if (event.data?.source !== "figr-agent") return; // only our agent's messages
@@ -33,7 +38,7 @@ window.addEventListener("message", (event) => {
   const iframe = findIframe(event.source);
   if (!iframe) return; // not one of our previews
 
-  handlers[event.data.type]?.(event.data, iframe);
+  handlers[event.data.type]?.forEach((handler) => handler(event.data, iframe));
 });
 
 // Send a message to one preview page.
