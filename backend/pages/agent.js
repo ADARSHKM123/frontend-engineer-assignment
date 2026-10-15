@@ -38,6 +38,13 @@
       hovered = null;
       lastHoverSent = "null";
     }
+
+    if (event.data.type === "set-selection") {
+      // The host decided what is selected; we keep measuring those elements.
+      selectedIds = event.data.ids;
+      lastSelectionSent = ""; // always answer, so the host gets fresh boxes right away
+      scheduleSelectionCheck();
+    }
   });
 
   // ---- Names (used in labels and, later, the layers panel) ----
@@ -49,6 +56,38 @@
     if (firstClass) return `${tag}.${firstClass}`;
     if (element.id) return `${tag}#${element.id}`;
     return tag;
+  }
+
+  // The element's box relative to the page's viewport, which is the preview frame.
+  function rectOf(element) {
+    const r = element.getBoundingClientRect();
+    return { x: r.x, y: r.y, width: r.width, height: r.height };
+  }
+
+  // ---- Element ids ----
+  // The host can't hold this page's DOM nodes, so every element we tell it
+  // about gets a short id ("e1", "e2", ...). The same element keeps its id.
+  //   WeakMap: element -> id. It doesn't keep removed elements alive.
+  //   Map of WeakRef: id -> element, to find the element the host asks about.
+  //   A WeakRef also lets a removed element be garbage-collected.
+  let nextId = 1;
+  const idByElement = new WeakMap();
+  const elementById = new Map();
+
+  function idOf(element) {
+    let id = idByElement.get(element);
+    if (!id) {
+      id = `e${nextId++}`;
+      idByElement.set(element, id);
+      elementById.set(id, new WeakRef(element));
+    }
+    return id;
+  }
+
+  // The element with this id, or null if it was removed from the page.
+  function findElement(id) {
+    const element = elementById.get(id)?.deref();
+    return element && element.isConnected ? element : null;
   }
 
   // ---- Hover (R2) ----
@@ -71,8 +110,7 @@
   function sendHover() {
     let hover = null;
     if (hovered) {
-      const r = hovered.getBoundingClientRect();
-      hover = { name: nameOf(hovered), rect: { x: r.x, y: r.y, width: r.width, height: r.height } };
+      hover = { id: idOf(hovered), name: nameOf(hovered), rect: rectOf(hovered) };
     }
     // Only send when something changed: pointermove fires very often.
     const key = JSON.stringify(hover);
@@ -117,6 +155,60 @@
     { capture: true },
   );
 
+  // ---- Selection (R3) ----
+  // The host owns the selection and sends us the selected ids. While anything
+  // is selected, we measure those elements every frame and report changes, so
+  // their outlines stay glued when the page scrolls (including inner scroll
+  // areas) or the elements move or resize (R3.4).
+  let selectedIds = [];
+  let lastSelectionSent = "";
+  let selectionFrame = 0;
+
+  // True when the element is scrolled completely out of a scroll area inside the
+  // page (e.g. a row scrolled out of the orders table). It stays selected but gets
+  // no outline (R3.4). Scrolling out of the page itself is handled by the host,
+  // which clips outlines to the preview's edges.
+  function isHiddenByScrollArea(element, rect) {
+    for (let parent = element.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+      const style = getComputedStyle(parent);
+      if (style.overflowX === "visible" && style.overflowY === "visible") continue;
+      const area = parent.getBoundingClientRect();
+      const overlaps =
+        rect.x < area.right && rect.x + rect.width > area.left &&
+        rect.y < area.bottom && rect.y + rect.height > area.top;
+      if (!overlaps) return true;
+    }
+    return false;
+  }
+
+  function checkSelection() {
+    selectionFrame = 0;
+    const boxes = [];
+    for (const id of selectedIds) {
+      const element = findElement(id);
+      if (!element) continue;
+      const rect = rectOf(element);
+      boxes.push({ id, name: nameOf(element), rect, hidden: isHiddenByScrollArea(element, rect) });
+    }
+    const key = JSON.stringify(boxes);
+    if (key !== lastSelectionSent) {
+      lastSelectionSent = key;
+      send("selection", { boxes });
+    }
+    if (selectedIds.length) selectionFrame = requestAnimationFrame(checkSelection);
+  }
+
+  function scheduleSelectionCheck() {
+    if (!selectionFrame) selectionFrame = requestAnimationFrame(checkSelection);
+  }
+
+  // A click in Select mode: tell the host which element is under the pointer
+  // (null for the page background). The host decides what that does to the selection.
+  function sendPick(event) {
+    const element = elementAt(event.clientX, event.clientY);
+    send("pick", { id: element ? idOf(element) : null, shiftKey: event.shiftKey });
+  }
+
   // ---- Select mode: clicks never reach the page (R1.5) ----
   // Listening on window in the capture phase means we see each event before
   // any element in the page does. stopImmediatePropagation stops the page's
@@ -132,6 +224,9 @@
       type,
       (event) => {
         if (mode !== "select") return;
+        // pointerdown (not click) so it also works on disabled controls, where
+        // browsers don't fire click (R2.4).
+        if (type === "pointerdown" && event.button === 0) sendPick(event);
         event.preventDefault();
         event.stopImmediatePropagation();
       },
