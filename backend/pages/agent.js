@@ -42,6 +42,8 @@
     if (event.data.type === "set-selection") {
       // The host decided what is selected; we keep measuring those elements.
       selectedIds = event.data.ids;
+      // Forget fingerprints of elements that are no longer selected.
+      for (const id of fingerprints.keys()) if (!selectedIds.includes(id)) fingerprints.delete(id);
       lastSelectionSent = ""; // always answer, so the host gets fresh boxes right away
       scheduleSelectionCheck();
     }
@@ -88,6 +90,117 @@
   function findElement(id) {
     const element = elementById.get(id)?.deref();
     return element && element.isConnected ? element : null;
+  }
+
+  // ---- Identity across re-renders (R3.7) ----
+  // Some pages rebuild their DOM (e.g. innerHTML on every tick): a selected
+  // element is replaced by a brand-new node that looks the same. To keep it
+  // selected, we remember a "fingerprint" of WHERE each selected element is,
+  // and when its node disappears we use the fingerprint to find the new node.
+  //
+  // A fingerprint is:
+  //   anchor: the nearest element with a data-key — the element itself, an
+  //           ancestor, or a keyed sibling a few elements before/after it
+  //   path:   the child steps from the anchor down to the element
+  //   signatures: tag + id + classes + data-key + data-name at every step
+  //
+  // Rule: never jump to a different element. Any doubt (key not unique, the
+  // two sibling anchors disagree, a signature differs) means "no longer exists".
+  // Text is NOT part of it: text may change ("4s ago") while the element stays.
+  const fingerprints = new Map(); // id -> latest fingerprint, refreshed every frame
+
+  function signatureOf(element) {
+    return [
+      element.tagName,
+      element.id,
+      element.getAttribute("class") || "",
+      element.dataset?.key || "",
+      element.dataset?.name || "",
+    ].join("|");
+  }
+
+  function indexOf(element) {
+    return Array.prototype.indexOf.call(element.parentElement.children, element);
+  }
+
+  // The nearest sibling with a data-key, walking in one direction (-1 = before, +1 = after).
+  function keyedSibling(element, direction) {
+    let distance = 0;
+    let sibling = element;
+    while ((sibling = direction < 0 ? sibling.previousElementSibling : sibling.nextElementSibling)) {
+      distance++;
+      if (sibling.dataset?.key) return { key: sibling.dataset.key, distance };
+    }
+    return null;
+  }
+
+  function fingerprintOf(element) {
+    const path = []; // [{ index, signature }] from the anchor down to the element
+    for (let node = element; node.parentElement && node !== document.body; node = node.parentElement) {
+      const signature = signatureOf(node);
+      if (node.dataset?.key) return { self: node.dataset.key, signature, path };
+      const before = keyedSibling(node, -1);
+      const after = keyedSibling(node, +1);
+      if (before || after) return { before, after, signature, path };
+      path.unshift({ index: indexOf(node), signature });
+    }
+    return { signature: signatureOf(document.body), path }; // no key anywhere: anchored at <body>
+  }
+
+  // The one element with this data-key, or null if there are none or several.
+  function uniqueByKey(key) {
+    const matches = document.querySelectorAll(`[data-key="${CSS.escape(key)}"]`);
+    return matches.length === 1 ? matches[0] : null;
+  }
+
+  function siblingAt(element, steps) {
+    let node = element;
+    for (let i = 0; i < Math.abs(steps) && node; i++) {
+      node = steps < 0 ? node.previousElementSibling : node.nextElementSibling;
+    }
+    return node;
+  }
+
+  // Find the element a fingerprint describes in the current DOM, or null.
+  function resolve(fp) {
+    let start;
+    if (fp.self) {
+      start = uniqueByKey(fp.self);
+    } else if (fp.before || fp.after) {
+      // Count forward from the keyed sibling before it, and/or back from the one after it.
+      const fromBefore = fp.before && uniqueByKey(fp.before.key);
+      const fromAfter = fp.after && uniqueByKey(fp.after.key);
+      const a = fromBefore ? siblingAt(fromBefore, fp.before.distance) : null;
+      const b = fromAfter ? siblingAt(fromAfter, -fp.after.distance) : null;
+      if (a && b && a !== b) return null; // the two anchors disagree: don't guess
+      start = a || b;
+    } else {
+      start = document.body;
+    }
+    if (!start || signatureOf(start) !== fp.signature) return null;
+
+    let node = start;
+    for (const step of fp.path) {
+      node = node.children[step.index];
+      if (!node || signatureOf(node) !== step.signature) return null;
+    }
+    return node;
+  }
+
+  // The selected element with this id: the same node if it's still in the page,
+  // otherwise its replacement found by fingerprint (which then takes over the id),
+  // otherwise null: it no longer exists.
+  function locateSelected(id) {
+    let element = findElement(id);
+    if (!element) {
+      const fp = fingerprints.get(id);
+      element = fp ? resolve(fp) : null;
+      if (!element) return null;
+      idByElement.set(element, id); // the new node takes over the old id
+      elementById.set(id, new WeakRef(element));
+    }
+    fingerprints.set(id, fingerprintOf(element)); // keep it fresh while the element is alive
+    return element;
   }
 
   // ---- Hover (R2) ----
@@ -184,16 +297,20 @@
   function checkSelection() {
     selectionFrame = 0;
     const boxes = [];
+    const missing = []; // selected ids whose element no longer exists (R3.7)
     for (const id of selectedIds) {
-      const element = findElement(id);
-      if (!element) continue;
+      const element = locateSelected(id);
+      if (!element) {
+        missing.push(id);
+        continue;
+      }
       const rect = rectOf(element);
       boxes.push({ id, name: nameOf(element), rect, hidden: isHiddenByScrollArea(element, rect) });
     }
-    const key = JSON.stringify(boxes);
+    const key = JSON.stringify({ boxes, missing });
     if (key !== lastSelectionSent) {
       lastSelectionSent = key;
-      send("selection", { boxes });
+      send("selection", { boxes, missing });
     }
     if (selectedIds.length) selectionFrame = requestAnimationFrame(checkSelection);
   }
@@ -206,7 +323,10 @@
   // (null for the page background). The host decides what that does to the selection.
   function sendPick(event) {
     const element = elementAt(event.clientX, event.clientY);
-    send("pick", { id: element ? idOf(element) : null, shiftKey: event.shiftKey });
+    const id = element ? idOf(element) : null;
+    // Fingerprint it now, so a rebuild during the round trip to the host can't lose it.
+    if (element) fingerprints.set(id, fingerprintOf(element));
+    send("pick", { id, shiftKey: event.shiftKey });
   }
 
   // ---- Select mode: clicks never reach the page (R1.5) ----
