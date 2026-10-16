@@ -53,6 +53,10 @@ export const useStore = create((set) => ({
   // Elements that no longer exist are simply missing.
   selectionBoxes: [],
 
+  // True when the selection became empty because its elements no longer exist.
+  // The inspector then says "This element no longer exists" until the next selection (R3.7).
+  selectionGone: false,
+
   // Changing mode also clears the hover: Interact mode draws no outlines (R1.5).
   setMode: (mode) => set({ mode, hover: null }),
 
@@ -83,6 +87,8 @@ export const useStore = create((set) => ({
         selection: { screenId: ids.length ? screenId : null, ids },
         // Keep boxes we already know for elements still selected; new ones arrive from the agent.
         selectionBoxes: sameScreen ? s.selectionBoxes.filter((b) => ids.includes(b.id)) : [],
+        // A new selection ends the "no longer exists" message.
+        selectionGone: ids.length ? false : s.selectionGone,
       };
     }),
 
@@ -90,8 +96,25 @@ export const useStore = create((set) => ({
   clearSelection: () => set({ selection: { screenId: null, ids: [] }, selectionBoxes: [] }),
 
   // New positions from the agent. Ignored if they belong to an older selection.
-  setSelectionBoxes: (screenId, boxes) =>
-    set((s) => (s.selection.screenId === screenId ? { selectionBoxes: boxes } : {})),
+  // `missing` lists selected ids whose element no longer exists: they leave the
+  // selection (R3.7). The agent already followed elements that were only rebuilt.
+  setSelectionBoxes: (screenId, boxes, missing = []) =>
+    set((s) => {
+      if (s.selection.screenId !== screenId) return {};
+
+      const ids = s.selection.ids.filter((id) => !missing.includes(id));
+
+      // A box for an id the user just deselected may still be in flight: drop it.
+      const changes = { selectionBoxes: boxes.filter((b) => ids.includes(b.id)) };
+
+      if (ids.length !== s.selection.ids.length) {
+        // Some selected elements are gone: remove them from the selection.
+        changes.selection = { screenId: ids.length ? screenId : null, ids };
+        // ...and if none are left, the inspector says so.
+        if (ids.length === 0) changes.selectionGone = true;
+      }
+      return changes;
+    }),
 
   // With a screenId: clear only if that preview owns the hover. This matters when
   // the pointer moves from preview A to B and A's "left" message arrives after B's hover.

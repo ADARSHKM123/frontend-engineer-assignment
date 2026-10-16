@@ -7,6 +7,7 @@ export default function App() {
   const mode = useStore((s) => s.mode);
   const setMode = useStore((s) => s.setMode);
   const zoom = useStore((s) => s.camera.zoom);
+  const selectionGone = useStore((s) => s.selectionGone && s.selection.ids.length === 0);
 
   return (
     <div className="app">
@@ -27,7 +28,10 @@ export default function App() {
 
       <aside className="sidebar">
         <section className="layers">Layers</section>
-        <section className="inspector">Inspector</section>
+        {/* Placeholder until the inspector milestone (R5); R3.7's message already shows here. */}
+        <section className="inspector">
+          {selectionGone ? <p className="inspector-gone">This element no longer exists</p> : "Inspector"}
+        </section>
       </aside>
     </div>
   );

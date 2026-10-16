@@ -4,7 +4,8 @@ import { onAgentMessage, sendToPreview, findIframeByScreenId } from "./bridge.js
 // Selection (R3). The store decides what is selected; the pages only report.
 //
 //   Page -> host:  "pick"       { id, shiftKey }    a click in Select mode (id null = background)
-//   Page -> host:  "selection"  { boxes }           where the selected elements are now
+//   Page -> host:  "selection"  { boxes, missing }  where the selected elements are now,
+//                                                    and which ones no longer exist (R3.7)
 //   Host -> page:  "set-selection" { ids }          which elements the page should keep measuring
 export function startSelectionSync() {
   onAgentMessage("pick", (data, iframe) => {
@@ -13,7 +14,7 @@ export function startSelectionSync() {
   });
 
   onAgentMessage("selection", (data, iframe) => {
-    useStore.getState().setSelectionBoxes(iframe.dataset.screenId, data.boxes);
+    useStore.getState().setSelectionBoxes(iframe.dataset.screenId, data.boxes, data.missing);
   });
 
   // The page (re)started. If it navigated, its old elements are gone: clear its selection (R3.8).

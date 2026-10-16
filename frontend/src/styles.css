@@ -147,3 +147,4 @@ body {
 }
 .layers, .inspector { padding: 12px; overflow: auto; color: var(--muted); }
 .layers { border-bottom: 1px solid var(--border); }
+.inspector-gone { margin: 0; color: var(--text); }
