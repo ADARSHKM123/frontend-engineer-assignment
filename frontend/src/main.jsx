@@ -6,6 +6,7 @@ import { startModeSync } from "./modeSync.js";
 import { startHoverSync } from "./hoverSync.js";
 import { startSelectionSync } from "./selectionSync.js";
 import { startLayersSync } from "./layersSync.js";
+import { startDetailsSync } from "./detailsSync.js";
 import "./styles.css";
 
 // Global listeners that are not tied to any one component.
@@ -14,6 +15,7 @@ startModeSync();
 startHoverSync();
 startSelectionSync();
 startLayersSync();
+startDetailsSync();
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>

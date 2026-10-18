@@ -42,3 +42,16 @@ export async function getScreens({ signal } = {}) {
   if (!valid) throw new Error("Server returned an invalid screens list");
   return data;
 }
+
+// GET /elements/:key -> { component, description, status, owner }
+// Returns { notFound: true } for a 404, which is NOT an error (R5.1).
+// Anything else that isn't four strings is bad data and becomes an error (R6.2).
+export async function getElementDetails(key, { signal } = {}) {
+  const { data, notFound } = await fetchJson(`/elements/${encodeURIComponent(key)}`, { signal });
+  if (notFound) return { notFound: true };
+
+  const fields = ["component", "description", "status", "owner"];
+  const valid = data !== null && typeof data === "object" && fields.every((f) => typeof data[f] === "string");
+  if (!valid) throw new Error("Server returned invalid element details");
+  return { details: data };
+}

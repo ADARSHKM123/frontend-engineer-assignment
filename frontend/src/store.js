@@ -70,6 +70,15 @@ export const useStore = create((set) => ({
   layersSearch: "",
   searchResults: {},
 
+  // Inspector Details (R5.1), for the one selected element:
+  //   status "idle"     nothing to show (no single selection yet)
+  //          "none"     the element has no data-key       → "No details"
+  //          "loading"  GET /elements/:key in flight
+  //          "ready"    data = { component, description, status, owner }
+  //          "notFound" the API returned 404              → "No details for this element"
+  //          "error"    the request failed or the data was bad → error + Retry
+  details: { status: "idle", data: null, error: null },
+
   // Settings for the dev-only menu (R6.7). layersDelayMs makes pages answer slowly.
   dev: { layersDelayMs: 0 },
 
@@ -122,6 +131,8 @@ export const useStore = create((set) => ({
   // layersTree.js, e.g. (tree) => setStatus(tree, "e7", "loading").
   updateLayers: (screenId, change) =>
     set((s) => ({ layers: { ...s.layers, [screenId]: change(s.layers[screenId] ?? emptyTree()) } })),
+
+  setDetails: (details) => set({ details: { data: null, error: null, ...details } }),
 
   setLayersSearch: (query) => set({ layersSearch: query }),
 
