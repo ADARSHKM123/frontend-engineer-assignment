@@ -7,6 +7,7 @@ import { report } from "../report.js";
 //
 //   Host -> page:  "get-children" { requestId, parentId }   parentId null = top level
 //   Page -> host:  "children"     { requestId, parentId, children: [{ id, name, key, hasChildren }] }
+//   Page -> host:  "children-changed" { parentId, children }   the page changed its DOM (R4.10)
 //
 // Every request gets a number and a 3-second timer. Whichever comes first wins:
 //   - the answer arrives: the children are stored, the timer is cancelled
@@ -185,6 +186,27 @@ export function startLayersSync() {
     useStore.getState().updateLayers(request.screenId, (tree) =>
       setChildren(tree, request.parentId, data.children),
     );
+  });
+
+  // The page changed its own DOM (R4.10): a loaded row's children are different now.
+  // The new list replaces the old one. Rows keep their ids (the page made sure of
+  // that), so open rows stay open and selected rows stay selected; removed rows
+  // simply aren't in the list any more.
+  onAgentMessage("children-changed", (data, iframe) => {
+    const screenId = iframe.dataset.screenId;
+    const parentId = data.parentId ?? ROOT;
+    const tree = useStore.getState().layers[screenId];
+    if (!tree?.nodes[parentId]?.childIds) return; // not loaded here (yet): nothing to update
+    if (!Array.isArray(data.children)) return;
+
+    // This row's children are now known, so a request still waiting for them is not needed.
+    for (const [requestId, request] of pending) {
+      if (request.screenId === screenId && request.parentId === parentId) {
+        clearTimeout(request.timer);
+        pending.delete(requestId);
+      }
+    }
+    useStore.getState().updateLayers(screenId, (t) => setChildren(t, parentId, data.children));
   });
 
   // The page (re)started: if it navigated, its old tree is gone (R3.8).

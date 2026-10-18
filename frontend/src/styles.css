@@ -147,7 +147,8 @@ body {
 }
 .layers, .inspector { padding: 12px; overflow: auto; color: var(--muted); }
 /* position: relative makes row.offsetTop measured from the panel, for scrolling to a row. */
-.layers { position: relative; border-bottom: 1px solid var(--border); padding: 6px 0; }
+/* overflow-anchor: none, because LayersPanel keeps rows from jumping itself (R4.10). */
+.layers { position: relative; overflow-anchor: none; border-bottom: 1px solid var(--border); padding: 6px 0; }
 
 /* ---- Layers panel (R4) ---- */
 /* The panel takes keyboard focus for the arrow keys (R4.8); show it only for keyboard users. */

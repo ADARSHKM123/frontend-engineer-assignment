@@ -34,6 +34,7 @@ export default function LayersPanel() {
     if (hasRows && panelRef.current) panelRef.current.scrollTop = savedLayersScroll(screenId);
   }, [screenId, hasRows]);
 
+  useScrollAnchor(panelRef, screenId);
   useScrollToSelectedRow(panelRef, selectedIds[selectedIds.length - 1]);
 
   if (!screenId || !tree) {
@@ -109,6 +110,39 @@ function findVisibleRow(rows, hover) {
   const visible = new Set(rows.map((row) => row.id));
   const candidates = [...(hover.ancestors ?? []), hover.id].reverse(); // the element first, then upwards
   return candidates.find((id) => visible.has(id)) ?? null;
+}
+
+// "Rows the user is looking at don't jump" (R4.10). When the page adds or removes
+// rows ABOVE what the user is looking at, everything below would shift. So:
+//   1. While rendering (the DOM still shows the OLD rows), note the first visible
+//      row (the "anchor") and how far it is from the top of the panel.
+//   2. After React updates the DOM, if the anchor row moved, scroll by the same
+//      amount to put it back.
+// Measuring during render (not on scroll events) means the snapshot is always
+// exactly what the user saw just before the change. (The CSS sets
+// overflow-anchor: none so the browser doesn't also try.)
+function useScrollAnchor(panelRef, screenId) {
+  const panel = panelRef.current;
+  let snapshot = null; // { id, offset } of the first visible row, before this render
+  if (panel) {
+    for (const row of panel.querySelectorAll(".layer-row")) {
+      if (row.offsetTop + row.offsetHeight > panel.scrollTop) {
+        snapshot = { id: row.dataset.rowId, offset: row.offsetTop - panel.scrollTop };
+        break;
+      }
+    }
+  }
+  // Remember which preview the snapshot belongs to: row ids from different pages
+  // can look alike ("e5"), so we never anchor across a switch of preview.
+  const lastScreenId = useRef(screenId);
+  const sameScreen = lastScreenId.current === screenId;
+
+  useLayoutEffect(() => {
+    lastScreenId.current = screenId;
+    if (!sameScreen || !snapshot || !panelRef.current) return;
+    const row = panelRef.current.querySelector(`[data-row-id="${snapshot.id}"]`);
+    if (row) panelRef.current.scrollTop = row.offsetTop - snapshot.offset; // removed? leave the scroll as is
+  });
 }
 
 // When a new element is selected, scroll the panel to show its row (R4.5).
