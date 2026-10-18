@@ -146,7 +146,8 @@ body {
   min-height: 0;
 }
 .layers, .inspector { padding: 12px; overflow: auto; color: var(--muted); }
-.layers { border-bottom: 1px solid var(--border); padding: 6px 0; }
+/* position: relative makes row.offsetTop measured from the panel, for scrolling to a row. */
+.layers { position: relative; border-bottom: 1px solid var(--border); padding: 6px 0; }
 
 /* ---- Layers panel (R4) ---- */
 .layers-message { margin: 0; padding: 6px 12px; }
@@ -161,7 +162,11 @@ body {
   color: var(--text);
   white-space: nowrap;
 }
-.layer-row:hover { background: #f4f4f5; }
+.layer-row { cursor: default; user-select: none; }
+/* Hover and selection use the same colours as the outlines on the board. */
+.layer-row.is-hovered { box-shadow: inset 0 0 0 1px var(--hover); }
+.layer-row.is-selected { background: #ede9fe; }
+.layer-row.is-selected .layer-name { color: var(--selected); font-weight: 600; }
 
 /* A fixed-width box, so names line up whether or not a row has a chevron. */
 .layer-chevron {

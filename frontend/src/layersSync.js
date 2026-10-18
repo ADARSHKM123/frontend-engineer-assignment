@@ -76,6 +76,30 @@ export function toggleRow(screenId, id) {
   }
 }
 
+// Click on a row: select its element, exactly like clicking it in the preview
+// (Shift + click adds or removes, R4.7). Then scroll ONLY that page so the
+// element is in view (R4.6); the board doesn't move.
+export function clickRow(screenId, id, shiftKey) {
+  const { pickElement } = useStore.getState();
+  pickElement(screenId, id, shiftKey);
+
+  const isSelected = useStore.getState().selection.ids.includes(id); // false if Shift removed it
+  const iframe = findIframeByScreenId(screenId);
+  if (isSelected && iframe) sendToPreview(iframe, "scroll-into-view", { id });
+}
+
+// Open every ancestor row of an element (R4.5), loading the ones never loaded.
+// We know all the ancestor ids at once (the page sends them), so every missing
+// level is requested in parallel, even 30 levels deep (page 5).
+function revealRow(screenId, ancestors) {
+  for (const id of ancestors) {
+    const { layers, updateLayers } = useStore.getState();
+    const node = layers[screenId]?.nodes[id];
+    updateLayers(screenId, (tree) => setExpanded(tree, id, true));
+    if (!node?.childIds && node?.status !== "loading") loadChildren(screenId, id);
+  }
+}
+
 // Forget everything about a preview's tree: its rows and its unanswered requests.
 // Used when the page navigates; late answers for it are then ignored.
 function forgetScreen(screenId) {
@@ -124,5 +148,22 @@ export function startLayersSync() {
   // A new active preview: load its tree the first time it is shown.
   useStore.subscribe((state, previous) => {
     if (state.activeScreenId !== previous.activeScreenId) showActivePreview();
+  });
+
+  // A newly selected element: open its ancestor rows once (R4.5). Its ancestor
+  // ids arrive with its box from the page. "Once" matters: boxes are re-sent
+  // whenever the element moves, and we must not re-open rows the user closed.
+  let revealed = null; // "screenId/id" of the last element we opened rows for
+  useStore.subscribe((state) => {
+    const { screenId, ids } = state.selection;
+    const mostRecent = ids[ids.length - 1];
+    if (!mostRecent) {
+      revealed = null;
+      return;
+    }
+    const box = state.selectionBoxes.find((b) => b.id === mostRecent);
+    if (!box || revealed === `${screenId}/${mostRecent}`) return;
+    revealed = `${screenId}/${mostRecent}`;
+    revealRow(screenId, box.ancestors ?? []);
   });
 }

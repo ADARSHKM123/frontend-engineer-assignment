@@ -37,7 +37,7 @@ export const useStore = create((set) => ({
   camera: { x: 40, y: 60, zoom: MIN_ZOOM },
 
   // The one hovered element on the whole board (R2.2), or null.
-  // { screenId, id, name, rect: { x, y, width, height } }
+  // { screenId, id, name, rect: { x, y, width, height }, ancestors: [ids] }
   // rect is in the page's own pixels, relative to the preview's top-left corner.
   // id is given by the page's agent; the host never holds the page's DOM nodes.
   hover: null,
@@ -69,7 +69,9 @@ export const useStore = create((set) => ({
   // Changing mode also clears the hover: Interact mode draws no outlines (R1.5).
   setMode: (mode) => set({ mode, hover: null }),
 
-  setHover: (screenId, { id, name, rect }) => set({ hover: { screenId, id, name, rect } }),
+  // ancestors: ids above the element (top-level first), used by the layers panel (R4.4).
+  setHover: (screenId, { id, name, rect, ancestors }) =>
+    set({ hover: { screenId, id, name, rect, ancestors } }),
 
   // A click in a preview in Select mode (R3.1, R3.2, R3.3).
   // id is the clicked element, or null when the page background was clicked.

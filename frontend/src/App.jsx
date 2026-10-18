@@ -28,9 +28,7 @@ export default function App() {
       <Board />
 
       <aside className="sidebar">
-        <section className="layers">
-          <LayersPanel />
-        </section>
+        <LayersPanel />
         {/* Placeholder until the inspector milestone (R5); R3.7's message already shows here. */}
         <section className="inspector">
           {selectionGone ? <p className="inspector-gone">This element no longer exists</p> : "Inspector"}

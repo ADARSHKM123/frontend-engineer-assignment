@@ -19,6 +19,14 @@ export function startHoverSync() {
   });
 }
 
+// The pointer entered (id) or left (null) a row of the layers panel (R4.4).
+// The page treats that element as hovered, so the usual hover outline appears
+// and the usual "hover" message comes back to the store.
+export function hoverRow(screenId, id) {
+  const iframe = findIframeByScreenId(screenId);
+  if (iframe) sendToPreview(iframe, "set-hover", { id });
+}
+
 // Clear the hover because the board started panning or zooming (R2.3).
 // The page is told too, so it doesn't re-send the same hover until the pointer moves again.
 export function cancelHover() {
