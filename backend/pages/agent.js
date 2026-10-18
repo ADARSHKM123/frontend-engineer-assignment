@@ -35,8 +35,22 @@
       // The board started panning or zooming and already cleared the hover.
       // Forget the pointer until it moves again, so we don't re-send the same hover.
       pointer = null;
+      rowHoverId = null;
       hovered = null;
       lastHoverSent = "null";
+    }
+
+    if (event.data.type === "set-hover") {
+      // The pointer is over a row in the layers panel (R4.4): treat that element
+      // as hovered, so the normal hover loop draws and follows its outline.
+      rowHoverId = event.data.id;
+      scheduleHoverCheck();
+    }
+
+    if (event.data.type === "scroll-into-view") {
+      // A layers row was clicked (R4.6): scroll this page so the element shows.
+      const element = findElement(event.data.id);
+      if (element) scrollIntoViewInsidePage(element);
     }
 
     if (event.data.type === "set-selection") {
@@ -71,6 +85,43 @@
       setTimeout(() => send("children", { requestId, parentId, children }), delayMs);
     }
   });
+
+  // The ids of an element's ancestors, top-level first, not counting <body>.
+  // For <body> > main > section > h2 this is [id of main, id of section].
+  // The layers panel uses them to find (and open) the rows above an element.
+  function ancestorIdsOf(element) {
+    const ids = [];
+    for (let parent = element.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+      ids.unshift(idOf(parent));
+    }
+    return ids;
+  }
+
+  // Scroll this page (and any scroll areas inside it) just enough to show the
+  // element (R4.6). Done by hand on purpose: the browser's scrollIntoView() may
+  // also scroll the host app's board, and R4.6 says only the page may move.
+  function scrollIntoViewInsidePage(element) {
+    // How far to scroll so [start, end] fits inside [viewStart, viewEnd]; 0 if it already does.
+    function distance(start, end, viewStart, viewEnd) {
+      if (start < viewStart) return start - viewStart;
+      if (end > viewEnd) return Math.min(start - viewStart, end - viewEnd);
+      return 0;
+    }
+
+    // 1. Scroll areas inside the page, innermost first (e.g. the orders table on page 3).
+    for (let box = element.parentElement; box && box !== document.body; box = box.parentElement) {
+      const style = getComputedStyle(box);
+      if (!/(auto|scroll)/.test(style.overflowX + style.overflowY)) continue;
+      const r = element.getBoundingClientRect();
+      const b = box.getBoundingClientRect();
+      box.scrollTop += distance(r.top, r.bottom, b.top + box.clientTop, b.top + box.clientTop + box.clientHeight);
+      box.scrollLeft += distance(r.left, r.right, b.left + box.clientLeft, b.left + box.clientLeft + box.clientWidth);
+    }
+
+    // 2. The page itself. window.scrollBy only ever scrolls this iframe's document.
+    const r = element.getBoundingClientRect();
+    window.scrollBy(distance(r.left, r.right, 0, window.innerWidth), distance(r.top, r.bottom, 0, window.innerHeight));
+  }
 
   // One row of the layers panel: enough to draw it, without its children.
   // hasChildren decides whether the row gets a chevron (R4.2).
@@ -273,6 +324,7 @@
   // disabled buttons and inputs, SVG shapes, and whatever is on top where a
   // sticky header overlaps the content (R2.4).
   let pointer = null; // last pointer position inside the page, or null when outside
+  let rowHoverId = null; // element whose layers row is hovered (R4.4), or null
   let hovered = null; // the element currently hovered
   let lastHoverSent = "null"; // what we last told the host, to avoid repeating it
   let hoverFrame = 0; // pending requestAnimationFrame id, 0 when idle
@@ -287,7 +339,12 @@
   function sendHover() {
     let hover = null;
     if (hovered) {
-      hover = { id: idOf(hovered), name: nameOf(hovered), rect: rectOf(hovered) };
+      hover = {
+        id: idOf(hovered),
+        name: nameOf(hovered),
+        rect: rectOf(hovered),
+        ancestors: ancestorIdsOf(hovered), // lets the layers panel highlight its row (R4.4)
+      };
     }
     // Only send when something changed: pointermove fires very often.
     const key = JSON.stringify(hover);
@@ -300,11 +357,16 @@
   // Checking every frame (instead of only on pointermove) keeps the outline
   // glued when the page scrolls under a still pointer or the element moves or
   // resizes (R3.4), and it costs one hit-test per frame in one page at a time.
+  // The hovered element comes from the pointer when it is inside this page,
+  // otherwise from a hovered layers row.
   function checkHover() {
     hoverFrame = 0;
-    hovered = mode === "select" && pointer ? elementAt(pointer.x, pointer.y) : null;
+    if (mode !== "select") hovered = null;
+    else if (pointer) hovered = elementAt(pointer.x, pointer.y);
+    else if (rowHoverId) hovered = findElement(rowHoverId);
+    else hovered = null;
     sendHover();
-    if (mode === "select" && pointer) hoverFrame = requestAnimationFrame(checkHover);
+    if (mode === "select" && (pointer || rowHoverId)) hoverFrame = requestAnimationFrame(checkHover);
   }
 
   function scheduleHoverCheck() {
@@ -369,7 +431,13 @@
         continue;
       }
       const rect = rectOf(element);
-      boxes.push({ id, name: nameOf(element), rect, hidden: isHiddenByScrollArea(element, rect) });
+      boxes.push({
+        id,
+        name: nameOf(element),
+        rect,
+        hidden: isHiddenByScrollArea(element, rect),
+        ancestors: ancestorIdsOf(element), // lets the layers panel open its ancestors (R4.5)
+      });
     }
     const key = JSON.stringify({ boxes, missing });
     if (key !== lastSelectionSent) {
