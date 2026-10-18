@@ -65,11 +65,9 @@ export default function Inspector() {
 
 // One element: its values. Several: the value they all share, or "Mixed" (R5.2).
 function LiveFields({ boxes }) {
-  // console.log('LiveFields', boxes)
   return (
     <dl className="inspector-fields">
       {LIVE_FIELDS.map((field) => {
-        // console.log('field',field)
         const values = boxes.map(field.value);
         const shared = values.every((v) => v === values[0]);
         const value = shared ? values[0] : "Mixed";

@@ -60,7 +60,6 @@ export function startDetailsSync() {
   let lastTarget = null;
   useStore.subscribe((state) => {
     const target = singleTarget(state);
-    console.log('###################', target)
     if (sameTarget(target, lastTarget)) return; // same element: boxes re-arrive all the time
     lastTarget = target;
     loadDetails(target);
