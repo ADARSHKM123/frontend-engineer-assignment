@@ -79,8 +79,16 @@ export const useStore = create((set) => ({
   //          "error"    the request failed or the data was bad → error + Retry
   details: { status: "idle", data: null, error: null },
 
-  // Settings for the dev-only menu (R6.7). layersDelayMs makes pages answer slowly.
-  dev: { layersDelayMs: 0 },
+  // Each preview's connection to its page (R6.2): "connecting" | "connected" | "failed".
+  connections: {},
+
+  // The last error that happened inside each preview's page (R6.3), or nothing.
+  pageErrors: {},
+
+  // Settings for the dev-only menu (R6.7).
+  //   layersDelayMs  pages answer layers/search requests slowly
+  //   crash          { region, screenId } makes that region throw while rendering
+  dev: { layersDelayMs: 0, crash: null },
 
   // Changing mode also clears the hover: Interact mode draws no outlines (R1.5).
   setMode: (mode) => set({ mode, hover: null }),
@@ -131,6 +139,15 @@ export const useStore = create((set) => ({
   // layersTree.js, e.g. (tree) => setStatus(tree, "e7", "loading").
   updateLayers: (screenId, change) =>
     set((s) => ({ layers: { ...s.layers, [screenId]: change(s.layers[screenId] ?? emptyTree()) } })),
+
+  setConnection: (screenId, status) =>
+    set((s) => ({ connections: { ...s.connections, [screenId]: status } })),
+
+  // message null clears the badge (e.g. the preview reloaded or navigated).
+  setPageError: (screenId, message) =>
+    set((s) => ({ pageErrors: { ...s.pageErrors, [screenId]: message } })),
+
+  setDev: (changes) => set((s) => ({ dev: { ...s.dev, ...changes } })),
 
   setDetails: (details) => set({ details: { data: null, error: null, ...details } }),
 

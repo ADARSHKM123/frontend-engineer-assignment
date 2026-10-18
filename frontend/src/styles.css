@@ -209,6 +209,67 @@ body {
 .layer-error { color: #dc2626; }
 .layer-status button,
 .layers-message button { margin-left: 6px; padding: 1px 8px; font-size: 11px; cursor: pointer; }
+/* ---- Failures (R6) ---- */
+/* A region's error, shown in place of the region (board, layers, inspector). */
+.region-error { padding: 12px; color: var(--text); }
+.region-error p { margin: 0 0 4px; }
+.region-error button,
+.preview-failed button { margin-top: 6px; padding: 4px 12px; cursor: pointer; }
+
+/* Inside the scaled board, text is sized with / var(--zoom) to stay readable (as the names). */
+.preview-crashed {
+  width: 1280px;
+  height: 800px;
+  margin: 0;
+  padding: calc(16px / var(--zoom));
+  font-size: calc(13px / var(--zoom));
+  background: #fff;
+  box-shadow: 0 0 0 4px #fca5a5;
+}
+.preview-crashed button,
+.preview-failed button { font-size: calc(13px / var(--zoom)); }
+
+.preview-failed {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(4px / var(--zoom));
+  font-size: calc(14px / var(--zoom));
+  color: var(--text);
+  background: #fef2f2;
+}
+.preview-failed p { margin: 0; }
+
+/* R6.3: "Page error" badge next to the screen name; hover shows the message. */
+.page-error-badge {
+  position: relative;
+  margin-left: calc(8px / var(--zoom));
+  padding: 0 calc(5px / var(--zoom));
+  border-radius: calc(4px / var(--zoom));
+  font-size: calc(10px / var(--zoom));
+  line-height: calc(16px / var(--zoom));
+  font-weight: 600;
+  color: #fff;
+  background: #dc2626;
+  cursor: help;
+}
+.page-error-message {
+  display: none;
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  margin-bottom: calc(4px / var(--zoom));
+  padding: calc(4px / var(--zoom)) calc(8px / var(--zoom));
+  border-radius: calc(4px / var(--zoom));
+  font-weight: 400;
+  white-space: nowrap;
+  color: #fff;
+  background: var(--text);
+}
+.page-error-badge:hover .page-error-message { display: block; }
+
 /* ---- Inspector (R5) ---- */
 .inspector-message { margin: 0 0 8px; }
 .inspector-title { margin: 0 0 8px; font-size: 14px; color: var(--text); }

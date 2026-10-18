@@ -3,6 +3,7 @@ import { useStore } from "../store.js";
 import { onAgentMessage } from "../bridge.js";
 import { cancelHover } from "../hoverSync.js";
 import Preview from "./Preview.jsx";
+import RegionBoundary from "./RegionBoundary.jsx";
 
 // How fast the wheel zooms. One mouse-wheel notch (deltaY ≈ 100) zooms about 18%.
 const ZOOM_SPEED = 0.002;
@@ -140,8 +141,17 @@ export default function Board() {
           "--zoom": camera.zoom,
         }}
       >
+        {/* Each preview is its own failure region (R6.1): one crashing never takes down the others. */}
         {screens.map((screen) => (
-          <Preview key={screen.id} screen={screen} />
+          <RegionBoundary
+            key={screen.id}
+            region="preview"
+            screenId={screen.id}
+            label={`the “${screen.name}” preview`}
+            className="preview-crashed"
+          >
+            <Preview screen={screen} />
+          </RegionBoundary>
         ))}
       </div>
     </div>
