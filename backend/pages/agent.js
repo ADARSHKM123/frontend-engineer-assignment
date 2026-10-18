@@ -80,10 +80,82 @@
       // parentId null means the top level, which is the children of <body>.
       // delayMs lets the dev menu simulate a slow page (R6.7); normally 0.
       const { requestId, parentId, delayMs = 0 } = event.data;
-      const parent = parentId === null ? document.body : findElement(parentId);
-      const children = parent ? visibleChildren(parent).map(describeForLayers) : [];
+      const children = listChildren(parentId) ?? [];
+      // From now on, tell the host when this list changes (R4.10).
+      watchedParents.set(parentId, JSON.stringify(children));
       setTimeout(() => send("children", { requestId, parentId, children }), delayMs);
     }
+  });
+
+  // ---- Keeping the layers panel in step with the page (R4.10) ----
+  // The panel has loaded the children of some parents ("watched" parents). When
+  // the page changes its DOM, we rebuild those lists and send the ones that changed.
+  //
+  // Pages like page 4 rebuild everything with innerHTML: every element is a new
+  // node. To keep each row's id (and with it its open state and selection), every
+  // row has a fingerprint, the same as selected elements (R3.7). When a row's node
+  // is gone, its replacement found by fingerprint takes over the id.
+  const watchedParents = new Map(); // parentId (null = <body>) -> the list we last sent, as JSON
+  const rowFingerprints = new Map(); // row id -> fingerprint
+
+  // The children of a parent as layers rows, or null if the parent no longer exists.
+  function listChildren(parentId) {
+    const parent = parentId === null ? document.body : findElement(parentId);
+    if (!parent) return null;
+    return visibleChildren(parent).map((child) => {
+      const row = describeForLayers(child);
+      rowFingerprints.set(row.id, fingerprintOf(child)); // fresh, for the next rebuild
+      return row;
+    });
+  }
+
+  // Give every lost row's id to the new node that replaced it, if there is one.
+  // `claimed` stops two old rows from taking the same new node.
+  function relocateRows() {
+    const claimed = new Set();
+    for (const [id, fingerprint] of rowFingerprints) {
+      const current = findElement(id);
+      if (current) {
+        claimed.add(current);
+        continue;
+      }
+      const replacement = resolve(fingerprint);
+      if (replacement && !claimed.has(replacement)) {
+        claimed.add(replacement);
+        idByElement.set(replacement, id);
+        elementById.set(id, new WeakRef(replacement));
+      } else {
+        rowFingerprints.delete(id); // gone for good: its row disappears from the panel
+      }
+    }
+  }
+
+  function onPageChanged() {
+    // Selected elements first, so a selected row keeps the selection's id (R3.7).
+    for (const id of selectedIds) locateSelected(id);
+    relocateRows();
+
+    for (const [parentId, lastSent] of watchedParents) {
+      const children = listChildren(parentId);
+      if (children === null) {
+        watchedParents.delete(parentId); // the parent itself is gone; its own parent's list says so
+        continue;
+      }
+      const json = JSON.stringify(children);
+      if (json === lastSent) continue; // nothing visible changed for this list
+      watchedParents.set(parentId, json);
+      send("children-changed", { parentId, children });
+    }
+  }
+
+  // Watch the whole document: added/removed elements anywhere, and the attributes
+  // a row's name depends on. <html>, because <body> doesn't exist yet when this
+  // script runs in <head>.
+  new MutationObserver(onPageChanged).observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["class", "id", "data-name", "data-key"],
   });
 
   // The ids of an element's ancestors, top-level first, not counting <body>.
