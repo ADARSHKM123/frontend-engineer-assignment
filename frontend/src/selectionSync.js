@@ -15,14 +15,12 @@ import { onAgentMessage, sendToPreview, findIframeByScreenId } from "./bridge.js
 // Returns false when there's nothing to navigate from, so the key keeps its normal job.
 export function navigateSelection(direction) {
   const { mode, selection } = useStore.getState();
-  console.log('navigateSelection', selection)
   if (mode !== "select" || selection.ids.length === 0) return false;
 
   const iframe = findIframeByScreenId(selection.screenId);
   if (!iframe) return false;
 
   const mostRecent = selection.ids[selection.ids.length - 1];
-  console.log(iframe, "navigate", { id: mostRecent, direction })
   sendToPreview(iframe, "navigate", { id: mostRecent, direction });
   return true;
 }

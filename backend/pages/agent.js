@@ -153,19 +153,14 @@
   const fingerprints = new Map(); // id -> latest fingerprint, refreshed every frame
 
   function signatureOf(element) {
-    const signature = [
+    return [
       element.tagName,
       element.id,
       element.getAttribute("class") || "",
       element.dataset?.key || "",
       element.dataset?.name || "",
     ].join("|");
-
-    // console.log("SIGNATURE", signature);
-
-    return signature;
   }
-
 
   function indexOf(element) {
     return Array.prototype.indexOf.call(element.parentElement.children, element);
@@ -183,12 +178,10 @@
   }
 
   function fingerprintOf(element) {
-    // console.log('FROM FINGERPRINTOF', element)
     const path = []; // [{ index, signature }] from the anchor down to the element
     for (let node = element; node.parentElement && node !== document.body; node = node.parentElement) {
       const signature = signatureOf(node);
       if (node.dataset?.key) return { self: node.dataset.key, signature, path };
-      // console.log('NODE', node)
       const before = keyedSibling(node, -1);
       const after = keyedSibling(node, +1);
       if (before || after) return { before, after, signature, path };
