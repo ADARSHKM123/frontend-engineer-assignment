@@ -1,14 +1,13 @@
 import { useStore } from "./store.js";
 import Board from "./components/Board.jsx";
 import LayersPanel from "./components/LayersPanel.jsx";
+import Inspector from "./components/Inspector.jsx";
 
 // App shell: toolbar on top, board in the middle, layers and inspector on the side.
-// Layers and inspector are placeholders for now.
 export default function App() {
   const mode = useStore((s) => s.mode);
   const setMode = useStore((s) => s.setMode);
   const zoom = useStore((s) => s.camera.zoom);
-  const selectionGone = useStore((s) => s.selectionGone && s.selection.ids.length === 0);
 
   return (
     <div className="app">
@@ -29,10 +28,7 @@ export default function App() {
 
       <aside className="sidebar">
         <LayersPanel />
-        {/* Placeholder until the inspector milestone (R5); R3.7's message already shows here. */}
-        <section className="inspector">
-          {selectionGone ? <p className="inspector-gone">This element no longer exists</p> : "Inspector"}
-        </section>
+        <Inspector />
       </aside>
     </div>
   );

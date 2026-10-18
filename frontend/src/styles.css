@@ -209,4 +209,29 @@ body {
 .layer-error { color: #dc2626; }
 .layer-status button,
 .layers-message button { margin-left: 6px; padding: 1px 8px; font-size: 11px; cursor: pointer; }
-.inspector-gone { margin: 0; color: var(--text); }
+/* ---- Inspector (R5) ---- */
+.inspector-message { margin: 0 0 8px; }
+.inspector-title { margin: 0 0 8px; font-size: 14px; color: var(--text); }
+.inspector-heading {
+  margin: 12px 0 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--muted);
+}
+.inspector-fields { margin: 0; }
+.inspector-field { display: grid; grid-template-columns: 90px 1fr; gap: 8px; padding: 3px 0; }
+.inspector-field dt { color: var(--muted); }
+.inspector-field dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
+.swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+.inspector-error p { margin: 0 0 4px; color: #dc2626; }
+.inspector-error button { margin-top: 4px; padding: 2px 10px; cursor: pointer; }
