@@ -60,7 +60,28 @@
       }
       send("navigated", { from: event.data.id, id });
     }
+
+    if (event.data.type === "get-children") {
+      // Layers panel (R4.2, R4.3): "what are the children of this element?"
+      // parentId null means the top level, which is the children of <body>.
+      // delayMs lets the dev menu simulate a slow page (R6.7); normally 0.
+      const { requestId, parentId, delayMs = 0 } = event.data;
+      const parent = parentId === null ? document.body : findElement(parentId);
+      const children = parent ? visibleChildren(parent).map(describeForLayers) : [];
+      setTimeout(() => send("children", { requestId, parentId, children }), delayMs);
+    }
   });
+
+  // One row of the layers panel: enough to draw it, without its children.
+  // hasChildren decides whether the row gets a chevron (R4.2).
+  function describeForLayers(element) {
+    return {
+      id: idOf(element),
+      name: nameOf(element),
+      key: element.dataset?.key || null,
+      hasChildren: visibleChildren(element).length > 0,
+    };
+  }
 
   // ---- Keyboard navigation (R3.5) ----
   // Tags that are never drawn on screen. Skipping them means Tab never lands on
