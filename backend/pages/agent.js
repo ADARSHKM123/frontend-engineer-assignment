@@ -85,7 +85,52 @@
       watchedParents.set(parentId, JSON.stringify(children));
       setTimeout(() => send("children", { requestId, parentId, children }), delayMs);
     }
+
+    if (event.data.type === "search") {
+      // Layers search (R4.11). An empty query stops searching.
+      searchQuery = event.data.query;
+      lastSearchSent = ""; // always answer a new query
+      if (searchQuery) setTimeout(sendSearchResults, event.data.delayMs ?? 0);
+    }
   });
+
+  // ---- Layers search (R4.11) ----
+  // The host only knows the rows it has loaded, but search must cover the whole
+  // tree. So the page searches its own DOM: every element whose name contains the
+  // text, plus all its ancestors so the panel can show where it is.
+  let searchQuery = ""; // the current search, "" when not searching
+  let lastSearchSent = ""; // what we last sent, so page changes only resend real differences
+
+  function sendSearchResults() {
+    if (!searchQuery) return;
+    const text = searchQuery.toLowerCase();
+    const all = [...document.body.querySelectorAll("*")].filter((el) => !HIDDEN_TAGS.has(el.tagName));
+
+    // 1. Mark every match and every ancestor of a match.
+    const shown = new Set();
+    for (const element of all) {
+      if (!nameOf(element).toLowerCase().includes(text)) continue;
+      for (let node = element; node && node !== document.body; node = node.parentElement) shown.add(node);
+    }
+
+    // 2. List them in document order, so each parent comes before its children.
+    const rows = all
+      .filter((element) => shown.has(element))
+      .map((element) => {
+        const row = describeForLayers(element);
+        rowFingerprints.set(row.id, fingerprintOf(element)); // keep its id across rebuilds (R4.10)
+        return {
+          ...row,
+          parentId: element.parentElement === document.body ? null : idOf(element.parentElement),
+          match: nameOf(element).toLowerCase().includes(text), // false = only shown as an ancestor
+        };
+      });
+
+    const json = JSON.stringify(rows);
+    if (json === lastSearchSent) return;
+    lastSearchSent = json;
+    send("search-results", { query: searchQuery, rows });
+  }
 
   // ---- Keeping the layers panel in step with the page (R4.10) ----
   // The panel has loaded the children of some parents ("watched" parents). When
@@ -146,6 +191,8 @@
       watchedParents.set(parentId, json);
       send("children-changed", { parentId, children });
     }
+
+    sendSearchResults(); // a search in progress stays correct while the page changes
   }
 
   // Watch the whole document: added/removed elements anywhere, and the attributes
