@@ -539,6 +539,31 @@
     return false;
   }
 
+  // What the inspector shows about an element (R5.1), read from the page itself.
+  // It is part of the selection box, which we re-check every frame and re-send
+  // when anything changed, so the inspector updates when the element changes.
+  function liveInfoOf(element, rect) {
+    const style = getComputedStyle(element); // the final values the browser actually uses
+    return {
+      tag: element.tagName.toLowerCase(),
+      elementId: element.id || "",
+      classes: [...element.classList].join(" "),
+      key: element.dataset?.key || null, // for GET /elements/:key (Details)
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      // Position within the page = position on screen + how far the page is scrolled.
+      x: Math.round(rect.x + window.scrollX),
+      y: Math.round(rect.y + window.scrollY),
+      // The first 120 characters of its text, with runs of spaces and new lines squeezed to one space.
+      text: (element.textContent || "").replace(/\s+/g, " ").trim().slice(0, 120),
+      color: style.color,
+      background: style.backgroundColor,
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+    };
+  }
+
   function checkSelection() {
     selectionFrame = 0;
     const boxes = [];
@@ -556,6 +581,7 @@
         rect,
         hidden: isHiddenByScrollArea(element, rect),
         ancestors: ancestorIdsOf(element), // lets the layers panel open its ancestors (R4.5)
+        info: liveInfoOf(element, rect), // the inspector's Live section (R5.1)
       });
     }
     const key = JSON.stringify({ boxes, missing });
