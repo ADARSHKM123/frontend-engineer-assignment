@@ -680,6 +680,18 @@
     { passive: false }, // needed so preventDefault() is allowed on wheel
   );
 
+  // ---- Errors inside the page (R6.3) ----
+  // The page's own uncaught errors (page 1's "Watch demo" button) and rejected
+  // promises nobody handled (page 6's analytics) are passed to the host, which
+  // shows them as a "Page error" badge on this preview. The page keeps running.
+  window.addEventListener("error", (event) => {
+    send("page-error", { message: event.message || "Unknown error" });
+  });
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event.reason;
+    send("page-error", { message: reason?.message ?? String(reason) });
+  });
+
   // ---- Handshake ----
   // Tell the host this page's agent is running, so it can send the current mode.
   // This also runs again after the preview navigates to a new page (R3.8).
