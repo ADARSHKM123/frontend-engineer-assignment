@@ -59,6 +59,18 @@ export function setExpanded(tree, id, isExpanded) {
   return { ...tree, expanded: { ...tree.expanded, [id]: isExpanded } };
 }
 
+// The parent of rows[index], found in the same list of visible rows: the nearest
+// row ABOVE it that is one level less deep. null for a top-level row.
+//   ▾ main          depth 0   ← parent of "Release notes"
+//       ▸ section   depth 1
+//       ▸ Release   depth 1   ← rows[index]
+export function parentRowOf(rows, index) {
+  for (let i = index - 1; i >= 0; i--) {
+    if (rows[i].depth === rows[index].depth - 1) return rows[i];
+  }
+  return null;
+}
+
 // The rows to draw, top to bottom: every child of an expanded row, with its depth.
 // [{ id: "e1", depth: 0 }, { id: "e5", depth: 1 }, ...]
 export function visibleRows(tree) {

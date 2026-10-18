@@ -1,7 +1,14 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { useStore } from "../store.js";
 import { ROOT, visibleRows } from "../layersTree.js";
-import { loadChildren, toggleRow, clickRow } from "../layersSync.js";
+import {
+  loadChildren,
+  toggleRow,
+  clickRow,
+  panelArrowKey,
+  saveLayersScroll,
+  savedLayersScroll,
+} from "../layersSync.js";
 import { hoverRow } from "../hoverSync.js";
 
 const NONE = [];
@@ -18,6 +25,15 @@ export default function LayersPanel() {
   );
 
   const panelRef = useRef(null);
+  const hasRows = Boolean(tree?.nodes[ROOT].childIds);
+
+  // Switching the active preview restores that preview's scroll position (R4.9).
+  // Its open rows come back by themselves: each preview has its own tree in the store.
+  // useLayoutEffect runs before the browser paints, so there's no visible jump.
+  useLayoutEffect(() => {
+    if (hasRows && panelRef.current) panelRef.current.scrollTop = savedLayersScroll(screenId);
+  }, [screenId, hasRows]);
+
   useScrollToSelectedRow(panelRef, selectedIds[selectedIds.length - 1]);
 
   if (!screenId || !tree) {
@@ -51,8 +67,24 @@ export default function LayersPanel() {
   const rows = visibleRows(tree);
   const hoveredRowId = hover ? findVisibleRow(rows, hover) : null;
 
+  // Arrow keys while the panel has focus (R4.8). preventDefault stops the arrows
+  // from also scrolling the panel. Other keys (Enter, Tab, V, I, Escape…) carry
+  // on to the app-wide shortcuts in keyboard.js.
+  function onKeyDown(event) {
+    if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
+    event.preventDefault();
+    panelArrowKey(screenId, event.key);
+  }
+
   return (
-    <section className="layers" ref={panelRef}>
+    <section
+      className="layers"
+      ref={panelRef}
+      tabIndex={0} // focusable, so it can receive keys; clicking a row focuses it too
+      aria-label="Layers"
+      onKeyDown={onKeyDown}
+      onScroll={(event) => saveLayersScroll(screenId, event.currentTarget.scrollTop)}
+    >
       <div className="layers-tree" role="tree" aria-multiselectable="true">
         {rows.map(({ id, depth }) => (
           <LayerRow

@@ -1,6 +1,6 @@
 import { useStore } from "./store.js";
 import { onAgentMessage, sendToPreview, findIframeByScreenId } from "./bridge.js";
-import { ROOT, setStatus, setChildren, setExpanded } from "./layersTree.js";
+import { ROOT, setStatus, setChildren, setExpanded, visibleRows, parentRowOf } from "./layersTree.js";
 import { report } from "../report.js";
 
 // Layers panel loading (R4.1-R4.3).
@@ -100,6 +100,56 @@ function revealRow(screenId, ancestors) {
   }
 }
 
+// Arrow keys while the layers panel has focus (R4.8). They act on the current
+// row: the row of the most recently selected element.
+//   ↓ / ↑  select the next / previous visible row
+//   →      closed row: open it.   open row: select its first child
+//   ←      open row: close it.    closed row (or no children): select its parent
+export function panelArrowKey(screenId, key) {
+  const { layers, selection } = useStore.getState();
+  const tree = layers[screenId];
+  const rows = visibleRows(tree);
+  if (rows.length === 0) return;
+
+  const currentId = selection.screenId === screenId ? selection.ids[selection.ids.length - 1] : null;
+  const index = rows.findIndex((row) => row.id === currentId); // -1 if no current row
+  const select = (id) => clickRow(screenId, id, false); // same as clicking that row
+
+  if (key === "ArrowDown") return select(rows[index === -1 ? 0 : Math.min(index + 1, rows.length - 1)].id);
+  if (key === "ArrowUp") return select(rows[index === -1 ? 0 : Math.max(index - 1, 0)].id);
+  if (index === -1) return; // → and ← need a current row
+
+  const row = rows[index];
+  const node = tree.nodes[row.id];
+  const isOpen = Boolean(tree.expanded[row.id]);
+
+  if (key === "ArrowRight" && node.hasChildren) {
+    if (!isOpen) return toggleRow(screenId, row.id);
+    // Already open: its first child is the next row, one level deeper (if loaded yet).
+    const next = rows[index + 1];
+    if (next && next.depth === row.depth + 1) select(next.id);
+  }
+
+  if (key === "ArrowLeft") {
+    if (node.hasChildren && isOpen) return toggleRow(screenId, row.id);
+    const parent = parentRowOf(rows, index);
+    if (parent) select(parent.id); // top-level rows have no parent row: nothing happens
+  }
+}
+
+// The panel's scroll position, per preview (R4.9). Kept here rather than in the
+// store because nothing is drawn from it: it is only read back when a preview
+// becomes active again, and saving it on every scroll event shouldn't re-render.
+const scrollTops = new Map(); // screenId -> scrollTop
+
+export function saveLayersScroll(screenId, scrollTop) {
+  scrollTops.set(screenId, scrollTop);
+}
+
+export function savedLayersScroll(screenId) {
+  return scrollTops.get(screenId) ?? 0;
+}
+
 // Forget everything about a preview's tree: its rows and its unanswered requests.
 // Used when the page navigates; late answers for it are then ignored.
 function forgetScreen(screenId) {
@@ -110,6 +160,7 @@ function forgetScreen(screenId) {
     }
   }
   useStore.getState().resetLayers(screenId);
+  scrollTops.delete(screenId); // "until A's page navigates" (R4.9)
 }
 
 // Make sure the active preview's top level is loaded (R4.1).
