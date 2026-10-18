@@ -63,6 +63,13 @@ export const useStore = create((set) => ({
   // See layersTree.js for what a tree looks like.
   layers: {},
 
+  // Layers search (R4.11). The text in the search box ("" = not searching), and
+  // the results per preview: { query, status: "loading" | "ready" | "error",
+  // rows: [{ id, name, key, hasChildren, parentId, match, depth }] }.
+  // The search never changes the normal trees above; it is drawn separately.
+  layersSearch: "",
+  searchResults: {},
+
   // Settings for the dev-only menu (R6.7). layersDelayMs makes pages answer slowly.
   dev: { layersDelayMs: 0 },
 
@@ -115,6 +122,13 @@ export const useStore = create((set) => ({
   // layersTree.js, e.g. (tree) => setStatus(tree, "e7", "loading").
   updateLayers: (screenId, change) =>
     set((s) => ({ layers: { ...s.layers, [screenId]: change(s.layers[screenId] ?? emptyTree()) } })),
+
+  setLayersSearch: (query) => set({ layersSearch: query }),
+
+  setSearchResults: (screenId, result) =>
+    set((s) => ({ searchResults: { ...s.searchResults, [screenId]: result } })),
+
+  clearSearchResults: () => set({ searchResults: {} }),
 
   // Throw a preview's tree away, e.g. when its page navigated (R3.8).
   resetLayers: (screenId) =>

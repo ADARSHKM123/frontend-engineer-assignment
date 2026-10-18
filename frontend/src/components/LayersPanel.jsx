@@ -8,6 +8,8 @@ import {
   panelArrowKey,
   saveLayersScroll,
   savedLayersScroll,
+  setSearchQuery,
+  retrySearch,
 } from "../layersSync.js";
 import { hoverRow } from "../hoverSync.js";
 
@@ -23,16 +25,22 @@ export default function LayersPanel() {
   const selectedIds = useStore((s) =>
     s.selection.screenId && s.selection.screenId === s.activeScreenId ? s.selection.ids : NONE,
   );
+  // Search (R4.11): the box's text, and this preview's results.
+  const query = useStore((s) => s.layersSearch);
+  const results = useStore((s) => (s.activeScreenId ? s.searchResults[s.activeScreenId] : null));
+  const searching = query !== "";
 
   const panelRef = useRef(null);
   const hasRows = Boolean(tree?.nodes[ROOT].childIds);
 
   // Switching the active preview restores that preview's scroll position (R4.9).
   // Its open rows come back by themselves: each preview has its own tree in the store.
+  // Clearing a search also comes back here, to where the tree was before the search.
   // useLayoutEffect runs before the browser paints, so there's no visible jump.
   useLayoutEffect(() => {
-    if (hasRows && panelRef.current) panelRef.current.scrollTop = savedLayersScroll(screenId);
-  }, [screenId, hasRows]);
+    if (!panelRef.current || !hasRows) return;
+    panelRef.current.scrollTop = searching ? 0 : savedLayersScroll(screenId);
+  }, [screenId, hasRows, searching]);
 
   useScrollAnchor(panelRef, screenId);
   useScrollToSelectedRow(panelRef, selectedIds[selectedIds.length - 1]);
@@ -65,13 +73,17 @@ export default function LayersPanel() {
     );
   }
 
-  const rows = visibleRows(tree);
+  // While searching, the panel shows the search results instead of the tree.
+  // The tree itself is left untouched, which is how clearing restores it (R4.11).
+  const rows = searching ? (results?.rows ?? []) : visibleRows(tree);
   const hoveredRowId = hover ? findVisibleRow(rows, hover) : null;
 
   // Arrow keys while the panel has focus (R4.8). preventDefault stops the arrows
   // from also scrolling the panel. Other keys (Enter, Tab, V, I, Escape…) carry
-  // on to the app-wide shortcuts in keyboard.js.
+  // on to the app-wide shortcuts in keyboard.js. Keys typed in the search box
+  // are left alone, so the arrows still move the text cursor there.
   function onKeyDown(event) {
+    if (event.target.tagName === "INPUT") return;
     if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
     event.preventDefault();
     panelArrowKey(screenId, event.key);
@@ -84,23 +96,58 @@ export default function LayersPanel() {
       tabIndex={0} // focusable, so it can receive keys; clicking a row focuses it too
       aria-label="Layers"
       onKeyDown={onKeyDown}
-      onScroll={(event) => saveLayersScroll(screenId, event.currentTarget.scrollTop)}
+      // Only the tree's scroll position is remembered, not the search results' (R4.9).
+      onScroll={(event) => !searching && saveLayersScroll(screenId, event.currentTarget.scrollTop)}
     >
+      <div className="layers-search">
+        <input
+          type="search"
+          placeholder="Search layers"
+          aria-label="Search layers"
+          value={query}
+          onChange={(event) => setSearchQuery(event.target.value)}
+        />
+      </div>
+
+      {searching && <SearchStatus screenId={screenId} query={query} results={results} />}
+
       <div className="layers-tree" role="tree" aria-multiselectable="true">
-        {rows.map(({ id, depth }) => (
+        {rows.map((row) => (
           <LayerRow
-            key={id}
+            key={row.id}
             screenId={screenId}
-            node={tree.nodes[id]}
-            depth={depth}
-            expanded={Boolean(tree.expanded[id])}
-            hovered={id === hoveredRowId}
-            selected={selectedIds.includes(id)}
+            // In search results, the row's data comes with the result; otherwise from the tree.
+            node={searching ? row : tree.nodes[row.id]}
+            depth={row.depth}
+            expanded={!searching && Boolean(tree.expanded[row.id])}
+            hovered={row.id === hoveredRowId}
+            selected={selectedIds.includes(row.id)}
+            inSearch={searching}
+            dimmed={searching && !row.match} // shown only because it's above a match
           />
         ))}
       </div>
     </section>
   );
+}
+
+// What the search is doing, above its results: searching, nothing found, or failed.
+function SearchStatus({ screenId, query, results }) {
+  if (results?.status === "error") {
+    return (
+      <div className="layers-message" role="alert">
+        <p>Couldn't search this preview.</p>
+        <button onClick={() => retrySearch(screenId)}>Retry</button>
+      </div>
+    );
+  }
+  if (!results || (results.status === "loading" && results.rows.length === 0)) {
+    return <p className="layers-message">Searching…</p>;
+  }
+  if (results.status === "ready" && results.rows.length === 0) {
+    return <p className="layers-message">No layers match “{query}”</p>;
+  }
+  return null;
 }
 
 // The row to highlight for a hovered element (R4.4): its own row if it's visible,
@@ -162,8 +209,10 @@ function useScrollToSelectedRow(panelRef, targetId) {
     scrolledTo.current = targetId;
 
     // Scroll only the panel (never the page or the board), and only if needed.
-    if (row.offsetTop < panel.scrollTop) {
-      panel.scrollTop = row.offsetTop;
+    // The search box stays stuck at the top, so a row must sit below it to be seen.
+    const searchBoxHeight = panel.querySelector(".layers-search")?.offsetHeight ?? 0;
+    if (row.offsetTop - searchBoxHeight < panel.scrollTop) {
+      panel.scrollTop = row.offsetTop - searchBoxHeight;
     } else if (row.offsetTop + row.offsetHeight > panel.scrollTop + panel.clientHeight) {
       panel.scrollTop = row.offsetTop + row.offsetHeight - panel.clientHeight;
     }
@@ -172,8 +221,10 @@ function useScrollToSelectedRow(panelRef, targetId) {
 
 // One row: indentation, chevron (if it has children), name, and its loading state (R4.2, R4.3).
 // Hovering it outlines the element (R4.4); clicking selects it (R4.5, R4.7).
-function LayerRow({ screenId, node, depth, expanded, hovered, selected }) {
-  const className = ["layer-row", hovered && "is-hovered", selected && "is-selected"]
+// In search results (inSearch) rows can't be opened or closed: the results show
+// exactly the matches and their ancestors. dimmed = an ancestor, not a match.
+function LayerRow({ screenId, node, depth, expanded, hovered, selected, inSearch, dimmed }) {
+  const className = ["layer-row", hovered && "is-hovered", selected && "is-selected", dimmed && "is-dimmed"]
     .filter(Boolean)
     .join(" ");
 
@@ -182,14 +233,14 @@ function LayerRow({ screenId, node, depth, expanded, hovered, selected }) {
       className={className}
       role="treeitem"
       aria-selected={selected}
-      aria-expanded={node.hasChildren ? expanded : undefined}
+      aria-expanded={node.hasChildren && !inSearch ? expanded : undefined}
       data-row-id={node.id}
       style={{ paddingLeft: 6 + depth * 14 }}
       onMouseEnter={() => hoverRow(screenId, node.id)}
       onMouseLeave={() => hoverRow(screenId, null)}
       onClick={(event) => clickRow(screenId, node.id, event.shiftKey)}
     >
-      {node.hasChildren ? (
+      {node.hasChildren && !inSearch ? (
         <button
           className="layer-chevron"
           aria-label={expanded ? "Collapse" : "Expand"}

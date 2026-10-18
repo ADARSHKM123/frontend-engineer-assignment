@@ -172,6 +172,24 @@ body {
 .layer-row.is-selected { background: #ede9fe; }
 .layer-row.is-selected .layer-name { color: var(--selected); font-weight: 600; }
 
+/* Search (R4.11): the box stays at the top while the results scroll under it. */
+.layers-search {
+  position: sticky;
+  top: -6px; /* the panel's top padding */
+  z-index: 1;
+  padding: 0 8px 6px;
+  background: var(--panel);
+}
+.layers-search input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font: inherit;
+}
+/* Ancestors shown only to give a match its place in the tree. */
+.layer-row.is-dimmed .layer-name { color: var(--muted); }
+
 /* A fixed-width box, so names line up whether or not a row has a chevron. */
 .layer-chevron {
   flex: none;

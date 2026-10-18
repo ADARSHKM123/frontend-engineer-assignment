@@ -107,9 +107,9 @@ function revealRow(screenId, ancestors) {
 //   →      closed row: open it.   open row: select its first child
 //   ←      open row: close it.    closed row (or no children): select its parent
 export function panelArrowKey(screenId, key) {
-  const { layers, selection } = useStore.getState();
+  const { layers, selection, layersSearch } = useStore.getState();
   const tree = layers[screenId];
-  const rows = visibleRows(tree);
+  const rows = rowsShown(screenId);
   if (rows.length === 0) return;
 
   const currentId = selection.screenId === screenId ? selection.ids[selection.ids.length - 1] : null;
@@ -121,6 +121,19 @@ export function panelArrowKey(screenId, key) {
   if (index === -1) return; // → and ← need a current row
 
   const row = rows[index];
+
+  // Search results are always fully open, so → and ← only move: to the first
+  // child row, or to the parent row.
+  if (layersSearch) {
+    const next = rows[index + 1];
+    if (key === "ArrowRight" && next && next.depth === row.depth + 1) select(next.id);
+    if (key === "ArrowLeft") {
+      const parent = parentRowOf(rows, index);
+      if (parent) select(parent.id);
+    }
+    return;
+  }
+
   const node = tree.nodes[row.id];
   const isOpen = Boolean(tree.expanded[row.id]);
 
@@ -136,6 +149,105 @@ export function panelArrowKey(screenId, key) {
     const parent = parentRowOf(rows, index);
     if (parent) select(parent.id); // top-level rows have no parent row: nothing happens
   }
+}
+
+// ---- Search (R4.11) ----
+//   Host -> page:  "search"         { query }          "" stops searching
+//   Page -> host:  "search-results" { query, rows }    matches + their ancestors, in page order
+// The page searches its whole DOM, so rows never loaded are found too.
+// The page re-sends results when its DOM changes, so they stay correct (R4.10).
+
+const searchTimers = new Map(); // screenId -> timer for "no answer within 3 seconds"
+const expandedBeforeSearch = new Map(); // screenId -> that tree's `expanded`, copied when search started
+
+// The search box changed.
+export function setSearchQuery(query) {
+  const { layersSearch, activeScreenId, setLayersSearch } = useStore.getState();
+  setLayersSearch(query);
+
+  if (query) {
+    if (activeScreenId) runSearch(activeScreenId);
+    return;
+  }
+  if (layersSearch) stopSearch();
+}
+
+function runSearch(screenId) {
+  const { layers, searchResults, setSearchResults, layersSearch: query, dev } = useStore.getState();
+
+  // Copy the open rows once, the first time this preview is searched. Selecting a
+  // result opens its ancestors in the normal tree (R4.5); clearing puts this copy back.
+  if (!expandedBeforeSearch.has(screenId) && layers[screenId]) {
+    expandedBeforeSearch.set(screenId, layers[screenId].expanded);
+  }
+
+  // Keep showing the previous results while the new ones load (no flicker while typing).
+  setSearchResults(screenId, { query, status: "loading", rows: searchResults[screenId]?.rows ?? [] });
+
+  clearTimeout(searchTimers.get(screenId));
+  searchTimers.set(
+    screenId,
+    setTimeout(() => {
+      searchTimers.delete(screenId);
+      const current = useStore.getState().searchResults[screenId];
+      if (current?.query !== query || current.status !== "loading") return;
+      setSearchResults(screenId, { query, status: "error", rows: [] });
+      report(new Error("The page didn't answer the search within 3 seconds"), { region: "layers", screenId });
+    }, TIMEOUT_MS),
+  );
+
+  const iframe = findIframeByScreenId(screenId);
+  if (iframe) sendToPreview(iframe, "search", { query, delayMs: dev.layersDelayMs });
+}
+
+// The search box was cleared: stop every page searching, drop the results, and
+// put back exactly the open rows each searched preview had before (R4.11).
+function stopSearch() {
+  const { updateLayers, clearSearchResults } = useStore.getState();
+  for (const [screenId, expanded] of expandedBeforeSearch) {
+    updateLayers(screenId, (tree) => ({ ...tree, expanded }));
+    const iframe = findIframeByScreenId(screenId);
+    if (iframe) sendToPreview(iframe, "search", { query: "" });
+  }
+  for (const timer of searchTimers.values()) clearTimeout(timer);
+  searchTimers.clear();
+  expandedBeforeSearch.clear();
+  clearSearchResults();
+}
+
+// Retry button after a search error.
+export function retrySearch(screenId) {
+  runSearch(screenId);
+}
+
+function onSearchResults(data, iframe) {
+  const screenId = iframe.dataset.screenId;
+  const { layersSearch, searchResults, setSearchResults } = useStore.getState();
+  if (!layersSearch || data.query !== layersSearch) return; // an answer for an old query: ignore
+  // This search already timed out: its late answer changes nothing (R6.6), until Retry.
+  // (Updates while results are showing are fine: they come from the page changing, R4.10.)
+  if (searchResults[screenId]?.status === "error") return;
+  if (!Array.isArray(data.rows)) return;
+
+  clearTimeout(searchTimers.get(screenId));
+  searchTimers.delete(screenId);
+
+  // Work out each row's depth from its parent (parents always come first).
+  const depthOf = new Map();
+  const rows = data.rows.map((row) => {
+    const depth = row.parentId === null ? 0 : (depthOf.get(row.parentId) ?? -1) + 1;
+    depthOf.set(row.id, depth);
+    return { ...row, depth };
+  });
+  setSearchResults(screenId, { query: data.query, status: "ready", rows });
+}
+
+// The rows the panel is showing right now: search results while searching,
+// otherwise the normal tree. Arrow keys move through these (R4.8).
+function rowsShown(screenId) {
+  const { layersSearch, searchResults, layers } = useStore.getState();
+  if (layersSearch) return searchResults[screenId]?.rows ?? [];
+  return visibleRows(layers[screenId]);
 }
 
 // The panel's scroll position, per preview (R4.9). Kept here rather than in the
@@ -162,6 +274,13 @@ function forgetScreen(screenId) {
   }
   useStore.getState().resetLayers(screenId);
   scrollTops.delete(screenId); // "until A's page navigates" (R4.9)
+  expandedBeforeSearch.delete(screenId); // the old page's open rows mean nothing now
+}
+
+// Searching while the active preview changes or navigates: search it too.
+function searchActivePreview() {
+  const { layersSearch, activeScreenId } = useStore.getState();
+  if (layersSearch && activeScreenId) runSearch(activeScreenId);
 }
 
 // Make sure the active preview's top level is loaded (R4.1).
@@ -216,11 +335,16 @@ export function startLayersSync() {
     if (!useStore.getState().layers[screenId]) return; // never loaded: nothing to forget
     forgetScreen(screenId);
     showActivePreview();
+    if (screenId === useStore.getState().activeScreenId) searchActivePreview(); // the new page needs the query
   });
 
-  // A new active preview: load its tree the first time it is shown.
+  onAgentMessage("search-results", onSearchResults);
+
+  // A new active preview: load its tree the first time it is shown (and search it, if searching).
   useStore.subscribe((state, previous) => {
-    if (state.activeScreenId !== previous.activeScreenId) showActivePreview();
+    if (state.activeScreenId === previous.activeScreenId) return;
+    showActivePreview();
+    searchActivePreview();
   });
 
   // A newly selected element: open its ancestor rows once (R4.5). Its ancestor
