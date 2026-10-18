@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { getScreens, isAbortError } from "./api.js";
 import { report } from "../report.js";
+import { emptyTree } from "./layersTree.js";
 
 // The app's shared state lives here, in one Zustand store.
 //
@@ -57,6 +58,14 @@ export const useStore = create((set) => ({
   // The inspector then says "This element no longer exists" until the next selection (R3.7).
   selectionGone: false,
 
+  // Layers panel (R4): one tree per preview, keyed by screenId. Kept per preview
+  // so switching the active preview and back can restore it (R4.9).
+  // See layersTree.js for what a tree looks like.
+  layers: {},
+
+  // Settings for the dev-only menu (R6.7). layersDelayMs makes pages answer slowly.
+  dev: { layersDelayMs: 0 },
+
   // Changing mode also clears the hover: Interact mode draws no outlines (R1.5).
   setMode: (mode) => set({ mode, hover: null }),
 
@@ -99,6 +108,19 @@ export const useStore = create((set) => ({
       selectionBoxes: s.selectionBoxes.filter((b) => b.id === id), // the agent sends the new box
       selectionGone: false,
     })),
+
+  // Change one preview's layers tree. `change` is one of the pure functions in
+  // layersTree.js, e.g. (tree) => setStatus(tree, "e7", "loading").
+  updateLayers: (screenId, change) =>
+    set((s) => ({ layers: { ...s.layers, [screenId]: change(s.layers[screenId] ?? emptyTree()) } })),
+
+  // Throw a preview's tree away, e.g. when its page navigated (R3.8).
+  resetLayers: (screenId) =>
+    set((s) => {
+      const layers = { ...s.layers };
+      delete layers[screenId];
+      return { layers };
+    }),
 
   // Escape, clicking empty board space, or the page navigating (R3.3, R3.8).
   clearSelection: () => set({ selection: { screenId: null, ids: [] }, selectionBoxes: [] }),
