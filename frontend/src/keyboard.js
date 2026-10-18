@@ -1,5 +1,6 @@
 import { useStore } from "./store.js";
 import { onAgentMessage } from "./bridge.js";
+import { navigateSelection } from "./selectionSync.js";
 
 // Keyboard shortcuts. Keys reach the host in two ways:
 //   1. Pressed while the host has focus: a normal keydown on the host window.
@@ -15,7 +16,7 @@ function isTyping(element) {
 }
 
 // Returns true when the key was a shortcut (so the caller can stop the browser default).
-function handleShortcut({ key, ctrlKey, metaKey, altKey }) {
+function handleShortcut({ key, shiftKey, ctrlKey, metaKey, altKey }) {
   if (ctrlKey || metaKey || altKey) return false; // leave Ctrl+C, Cmd+R, etc. alone
 
   const { mode, setMode, clearSelection } = useStore.getState();
@@ -32,6 +33,12 @@ function handleShortcut({ key, ctrlKey, metaKey, altKey }) {
       if (mode !== "select") return false;
       clearSelection(); // R3.3
       return true;
+    // Keyboard navigation (R3.5). navigateSelection returns false when nothing
+    // is selected, so Tab still moves focus around the app as usual then.
+    case "enter":
+      return navigateSelection(shiftKey ? "parent" : "first-child");
+    case "tab":
+      return navigateSelection(shiftKey ? "previous" : "next");
     default:
       return false;
   }

@@ -7,7 +7,39 @@ import { onAgentMessage, sendToPreview, findIframeByScreenId } from "./bridge.js
 //   Page -> host:  "selection"  { boxes, missing }  where the selected elements are now,
 //                                                    and which ones no longer exist (R3.7)
 //   Host -> page:  "set-selection" { ids }          which elements the page should keep measuring
+//   Host -> page:  "navigate"   { id, direction }   keyboard navigation from this element (R3.5)
+//   Page -> host:  "navigated"  { from, id }        the element found there (id null = nothing)
+
+// Ask the page to move the selection with the keyboard (R3.5).
+// Acts on the most recently selected element: the last id in the list.
+// Returns false when there's nothing to navigate from, so the key keeps its normal job.
+export function navigateSelection(direction) {
+  const { mode, selection } = useStore.getState();
+  console.log('navigateSelection', selection)
+  if (mode !== "select" || selection.ids.length === 0) return false;
+
+  const iframe = findIframeByScreenId(selection.screenId);
+  if (!iframe) return false;
+
+  const mostRecent = selection.ids[selection.ids.length - 1];
+  console.log(iframe, "navigate", { id: mostRecent, direction })
+  sendToPreview(iframe, "navigate", { id: mostRecent, direction });
+  return true;
+}
+
 export function startSelectionSync() {
+  onAgentMessage("navigated", (data, iframe) => {
+    if (data.id === null) return; // no child / top level: "nothing happens"
+
+    // Only apply the answer if the selection hasn't changed while we waited.
+    const { selection, selectOnly } = useStore.getState();
+    const screenId = iframe.dataset.screenId;
+    const mostRecent = selection.ids[selection.ids.length - 1];
+    if (selection.screenId !== screenId || mostRecent !== data.from) return;
+
+    selectOnly(screenId, data.id);
+  });
+
   onAgentMessage("pick", (data, iframe) => {
     if (useStore.getState().mode !== "select") return;
     useStore.getState().pickElement(iframe.dataset.screenId, data.id, data.shiftKey);

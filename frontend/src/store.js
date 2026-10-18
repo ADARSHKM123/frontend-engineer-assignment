@@ -92,6 +92,14 @@ export const useStore = create((set) => ({
       };
     }),
 
+  // Keyboard navigation's result replaces the whole selection with one element (R3.5).
+  selectOnly: (screenId, id) =>
+    set((s) => ({
+      selection: { screenId, ids: [id] },
+      selectionBoxes: s.selectionBoxes.filter((b) => b.id === id), // the agent sends the new box
+      selectionGone: false,
+    })),
+
   // Escape, clicking empty board space, or the page navigating (R3.3, R3.8).
   clearSelection: () => set({ selection: { screenId: null, ids: [] }, selectionBoxes: [] }),
 
