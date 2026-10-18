@@ -1,5 +1,6 @@
 import { useStore } from "./store.js";
 import Board from "./components/Board.jsx";
+import LayersPanel from "./components/LayersPanel.jsx";
 
 // App shell: toolbar on top, board in the middle, layers and inspector on the side.
 // Layers and inspector are placeholders for now.
@@ -27,7 +28,9 @@ export default function App() {
       <Board />
 
       <aside className="sidebar">
-        <section className="layers">Layers</section>
+        <section className="layers">
+          <LayersPanel />
+        </section>
         {/* Placeholder until the inspector milestone (R5); R3.7's message already shows here. */}
         <section className="inspector">
           {selectionGone ? <p className="inspector-gone">This element no longer exists</p> : "Inspector"}

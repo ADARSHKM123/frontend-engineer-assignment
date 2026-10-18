@@ -146,5 +146,40 @@ body {
   min-height: 0;
 }
 .layers, .inspector { padding: 12px; overflow: auto; color: var(--muted); }
-.layers { border-bottom: 1px solid var(--border); }
+.layers { border-bottom: 1px solid var(--border); padding: 6px 0; }
+
+/* ---- Layers panel (R4) ---- */
+.layers-message { margin: 0; padding: 6px 12px; }
+.layers-message p { margin: 0 0 6px; }
+
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding-right: 8px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.layer-row:hover { background: #f4f4f5; }
+
+/* A fixed-width box, so names line up whether or not a row has a chevron. */
+.layer-chevron {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 16px;
+  cursor: pointer;
+}
+
+.layer-name { overflow: hidden; text-overflow: ellipsis; }
+.layer-status { margin-left: auto; color: var(--muted); font-size: 11px; }
+.layer-error { color: #dc2626; }
+.layer-status button,
+.layers-message button { margin-left: 6px; padding: 1px 8px; font-size: 11px; cursor: pointer; }
 .inspector-gone { margin: 0; color: var(--text); }
