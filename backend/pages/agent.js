@@ -47,7 +47,50 @@
       lastSelectionSent = ""; // always answer, so the host gets fresh boxes right away
       scheduleSelectionCheck();
     }
+
+    if (event.data.type === "navigate") {
+      // Keyboard navigation (R3.5): the host asks "from this element, go to its
+      // first child / parent / next / previous sibling". We answer with an id, or null.
+      const from = locateSelected(event.data.id);
+      const target = from ? navigateFrom(from, event.data.direction) : null;
+      let id = null;
+      if (target) {
+        id = idOf(target);
+        fingerprints.set(id, fingerprintOf(target)); // so it survives a rebuild, like a click (R3.7)
+      }
+      send("navigated", { from: event.data.id, id });
+    }
   });
+
+  // ---- Keyboard navigation (R3.5) ----
+  // Tags that are never drawn on screen. Skipping them means Tab never lands on
+  // an invisible <script> or <style>, and Enter never "selects" one.
+  const HIDDEN_TAGS = new Set(["SCRIPT", "STYLE", "TEMPLATE", "NOSCRIPT", "LINK", "META"]);
+
+  function visibleChildren(element) {
+    return [...element.children].filter((child) => !HIDDEN_TAGS.has(child.tagName));
+  }
+
+  // direction: "first-child" (Enter), "parent" (Shift+Enter),
+  //            "next" (Tab), "previous" (Shift+Tab). Returns an element or null.
+  function navigateFrom(element, direction) {
+    if (direction === "first-child") {
+      return visibleChildren(element)[0] || null; // no children: nothing happens
+    }
+
+    if (direction === "parent") {
+      const parent = element.parentElement;
+      // Children of <body> are the top level: "Nothing happens at the top level".
+      if (!parent || parent === document.body || parent === document.documentElement) return null;
+      return parent;
+    }
+
+    // "next" / "previous": move among the siblings, wrapping around at the ends.
+    const siblings = visibleChildren(element.parentElement);
+    const index = siblings.indexOf(element);
+    const step = direction === "next" ? 1 : -1;
+    return siblings[(index + step + siblings.length) % siblings.length];
+  }
 
   // ---- Names (used in labels and, later, the layers panel) ----
   // data-name, else tag + first class, else tag + id, else the tag alone.
@@ -110,14 +153,19 @@
   const fingerprints = new Map(); // id -> latest fingerprint, refreshed every frame
 
   function signatureOf(element) {
-    return [
+    const signature = [
       element.tagName,
       element.id,
       element.getAttribute("class") || "",
       element.dataset?.key || "",
       element.dataset?.name || "",
     ].join("|");
+
+    // console.log("SIGNATURE", signature);
+
+    return signature;
   }
+
 
   function indexOf(element) {
     return Array.prototype.indexOf.call(element.parentElement.children, element);
@@ -135,10 +183,12 @@
   }
 
   function fingerprintOf(element) {
+    // console.log('FROM FINGERPRINTOF', element)
     const path = []; // [{ index, signature }] from the anchor down to the element
     for (let node = element; node.parentElement && node !== document.body; node = node.parentElement) {
       const signature = signatureOf(node);
       if (node.dataset?.key) return { self: node.dataset.key, signature, path };
+      // console.log('NODE', node)
       const before = keyedSibling(node, -1);
       const after = keyedSibling(node, +1);
       if (before || after) return { before, after, signature, path };
