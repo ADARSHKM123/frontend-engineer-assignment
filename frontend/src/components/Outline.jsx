@@ -1,24 +1,15 @@
 import { useStore } from "../store.js";
 
-// Label height on screen, in px. Must match .outline-label in styles.css.
-const LABEL_HEIGHT = 16;
+const LABEL_HEIGHT = 16; // must match .outline-label in styles.css
 
-// An outline plus name label drawn on top of one element of a preview.
-// It is rendered inside the preview's frame, so `rect` (the element's box in
-// page pixels) can be used as-is: the board's pan/zoom transform moves and
-// scales it together with the page, and the frame's overflow:hidden clips it
-// to the preview's edges (R3.4).
-//
-// kind: "hover" (1px) or "selected" (2px, next milestone).
+// Drawn inside the preview frame in page pixels, so the board's transform moves it
+// with the page and the frame's overflow: hidden clips it.
 export default function Outline({ rect, name, kind }) {
   const zoom = useStore((s) => s.camera.zoom);
 
-  // The label goes above the element, unless there's no room above it inside
-  // the preview; then it goes below (R3.4). Its height in page pixels is
-  // LABEL_HEIGHT / zoom, because the page is scaled by zoom on screen.
+  // Below the element when there's no room above it inside the preview.
   const labelAbove = rect.y >= LABEL_HEIGHT / zoom;
 
-  // If the element starts left of the preview, keep the label at the preview's edge.
   const labelLeft = Math.max(0, -rect.x);
 
   return (

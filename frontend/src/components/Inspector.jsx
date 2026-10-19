@@ -5,14 +5,12 @@ import RegionBoundary from "./RegionBoundary.jsx";
 
 const NONE = [];
 
-// Browsers report "no background" as rgba(0, 0, 0, 0); show it as a word.
+// Browsers report "no background" as rgba(0, 0, 0, 0).
 function readableColour(colour) {
   return colour === "rgba(0, 0, 0, 0)" ? "transparent" : colour;
 }
 
-// The Live fields (R5.1), in display order. Each one reads its value from an
-// element's box: box.name, plus box.info, which the page re-sends whenever the
-// element changes. Both the single view and the "N elements" view use this list.
+// Read from the selection boxes, which the page re-sends whenever the element changes.
 const LIVE_FIELDS = [
   { label: "Name", value: (box) => box.name },
   { label: "Tag", value: (box) => box.info.tag },
@@ -28,7 +26,6 @@ const LIVE_FIELDS = [
   { label: "Font weight", value: (box) => box.info.fontWeight },
 ];
 
-// The inspector (R5): what's selected, read live from the page, plus its Details from the API.
 export default function Inspector() {
   const ids = useStore((s) => s.selection.ids);
   const screenId = useStore((s) => s.selection.screenId);
@@ -38,7 +35,6 @@ export default function Inspector() {
   if (ids.length === 0) {
     return (
       <section className="inspector">
-        {/* R3.7: the selected element disappeared from its page. */}
         <p className="inspector-message">
           {selectionGone ? "This element no longer exists" : "Select an element to inspect it"}
         </p>
@@ -46,7 +42,6 @@ export default function Inspector() {
     );
   }
 
-  // The boxes of the selected elements we've heard about from the page so far.
   const selected = boxes.filter((box) => ids.includes(box.id) && box.info);
 
   return (
@@ -60,8 +55,7 @@ export default function Inspector() {
         <LiveFields boxes={selected} />
       )}
 
-      {/* Details only for a single element (R5.2). It's its own failure region
-          (R6.1): if it breaks, Live values still show. */}
+      {/* Its own failure region: if Details break, Live values still show. */}
       {ids.length === 1 && (
         <RegionBoundary
           region="details"
@@ -76,7 +70,7 @@ export default function Inspector() {
   );
 }
 
-// One element: its values. Several: the value they all share, or "Mixed" (R5.2).
+// With several elements, each field shows the shared value or "Mixed".
 function LiveFields({ boxes }) {
   return (
     <dl className="inspector-fields">
@@ -98,7 +92,6 @@ function LiveFields({ boxes }) {
   );
 }
 
-// Details from GET /elements/:key, with every state R5.1 and R6.2 ask for.
 function DetailsSection({ screenId }) {
   const details = useStore((s) => s.details);
 

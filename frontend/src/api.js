@@ -1,17 +1,7 @@
 import { API_URL } from "./config.js";
 
-// Every API call goes through fetchJson, so every call handles failures the same way.
-// The backend can fail in two ways (see backend/server.js):
-//   1. a 5xx status
-//   2. a 200 whose body is broken JSON
-// Both become a thrown Error here. A 404 is NOT treated as an error by this helper:
-// it returns { notFound: true } so callers can decide (R5.1 says a 404 is not an error).
-//
-// `signal` comes from an AbortController. When the user moves on, the caller aborts
-// the request, fetch throws an AbortError, and callers ignore it (R6.4).
-//
-// `query` adds the backend's test parameters, e.g. { fail: 1 } or { latency: 2000 }.
-// Only the dev menu (R6.7) uses them.
+// All API calls go through here: a 5xx or a broken JSON body becomes an Error,
+// while a 404 is returned as { notFound: true } because it is not an error.
 async function fetchJson(path, { signal, query } = {}) {
   const search = query && Object.keys(query).length ? `?${new URLSearchParams(query)}` : "";
   const res = await fetch(API_URL + path + search, { signal });
@@ -28,13 +18,11 @@ async function fetchJson(path, { signal, query } = {}) {
   }
 }
 
-// True when an error only means "this request was cancelled on purpose".
+// A cancelled request is not a failure.
 export function isAbortError(error) {
   return error?.name === "AbortError";
 }
 
-// GET /screens -> [{ id, name, url }]
-// Also checks the shape, so bad data fails here instead of somewhere in the UI.
 export async function getScreens({ signal, query } = {}) {
   const { data, notFound } = await fetchJson("/screens", { signal, query });
 
@@ -47,9 +35,6 @@ export async function getScreens({ signal, query } = {}) {
   return data;
 }
 
-// GET /elements/:key -> { component, description, status, owner }
-// Returns { notFound: true } for a 404, which is NOT an error (R5.1).
-// Anything else that isn't four strings is bad data and becomes an error (R6.2).
 export async function getElementDetails(key, { signal, query } = {}) {
   const { data, notFound } = await fetchJson(`/elements/${encodeURIComponent(key)}`, { signal, query });
   if (notFound) return { notFound: true };

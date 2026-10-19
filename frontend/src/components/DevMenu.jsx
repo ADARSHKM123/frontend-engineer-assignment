@@ -2,15 +2,8 @@ import { useState } from "react";
 import { useStore } from "../store.js";
 import { inRegion } from "../regions.js";
 
-// Dev-only menu (R6.7): triggers each failure on demand, for the video.
-// App.jsx only shows it when import.meta.env.DEV is true, so it never ships.
-//
-// Every trigger goes through the app's real failure paths:
-//   - API failures use the backend's own ?fail= / ?latency= parameters
-//   - a broken preview loads a page that doesn't exist (no agent → no "ready")
-//   - render crashes throw inside the region's boundary (DevCrashSwitch)
-//   - "throw outside rendering" makes the next handler/timer/message of that
-//     region throw from inside inRegion(), exactly where a real bug would
+// Dev-only menu. Each trigger uses the app's real failure path: the backend's
+// ?fail= / ?latency=, a page without the agent, or a throw inside a region.
 export default function DevMenu() {
   const [open, setOpen] = useState(false);
   const dev = useStore((s) => s.dev);
@@ -19,7 +12,7 @@ export default function DevMenu() {
   const [screenId, setScreenId] = useState(null);
   const { setDev, loadScreens } = useStore.getState();
 
-  const target = screenId ?? activeScreenId ?? screens[0]?.id ?? null; // the preview to break
+  const target = screenId ?? activeScreenId ?? screens[0]?.id ?? null;
   const crashing = (region, id = null) => dev.crash?.region === region && (dev.crash.screenId ?? null) === id;
   const toggleCrash = (region, id = null) => setDev({ crash: crashing(region, id) ? null : { region, screenId: id } });
   const selectionScreen = useStore((s) => s.selection.screenId);

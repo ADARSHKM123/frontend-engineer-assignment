@@ -6,18 +6,15 @@ import Preview from "./Preview.jsx";
 import RegionBoundary from "./RegionBoundary.jsx";
 import { inRegion } from "../regions.js";
 
-// How fast the wheel zooms. One mouse-wheel notch (deltaY ≈ 100) zooms about 18%.
-const ZOOM_SPEED = 0.002;
+const ZOOM_SPEED = 0.002; // one mouse-wheel notch (deltaY ≈ 100) zooms about 18 %
 
-// Wheel deltas can be in pixels, lines or pages (deltaMode 0, 1, 2). Convert to pixels.
+// Wheel deltas can be in pixels, lines or pages (deltaMode 0, 1, 2).
 function toPixels(delta, deltaMode) {
   if (deltaMode === 1) return delta * 16;
   if (deltaMode === 2) return delta * 800;
   return delta;
 }
 
-// The board: loads the screens and lays out one preview per screen in a grid (R1.1).
-// Drag or wheel over empty space pans it (R1.2). Ctrl/Cmd + wheel zooms it (R1.3).
 export default function Board() {
   const screens = useStore((s) => s.screens);
   const status = useStore((s) => s.screensStatus);
@@ -34,16 +31,15 @@ export default function Board() {
     return cancelScreens;
   }, [loadScreens, cancelScreens]);
 
-  // Wheel over the board itself (empty space and screen names).
-  // Added by hand because React's onWheel is passive, and passive listeners
-  // cannot call preventDefault() to stop the browser zooming the whole app.
+  // Added by hand: React's onWheel is passive, so it can't preventDefault() the
+  // browser's own Ctrl + wheel zoom.
   useEffect(() => {
     const board = boardRef.current;
     if (!board) return;
 
     function onWheel(event) {
       event.preventDefault();
-      cancelHover(); // panning or zooming clears the hover (R2.3)
+      cancelHover();
       const { panBy, zoomAt } = useStore.getState();
       const dx = toPixels(event.deltaX, event.deltaMode);
       const dy = toPixels(event.deltaY, event.deltaMode);
@@ -56,22 +52,20 @@ export default function Board() {
       }
     }
 
-    // inRegion: an error in the handler fails the board instead of being lost (R6.5).
     const safeOnWheel = inRegion("board", null, onWheel);
     board.addEventListener("wheel", safeOnWheel, { passive: false });
     return () => board.removeEventListener("wheel", safeOnWheel);
-  }, [status]); // the board element is only rendered once status is "ready"
+  }, [status]); // the board element only exists once status is "ready"
 
-  // Ctrl/Cmd + wheel over a preview arrives from that page's agent script (R1.3).
-  // `iframe` is the preview that sent it, so we know where that page sits on screen.
+  // Ctrl/Cmd + wheel over a preview, forwarded by its agent. The page sends
+  // the pointer in page pixels, so convert it to board pixels first.
   useEffect(
     () =>
       onAgentMessage("zoom-wheel", (data, iframe) => {
         const board = boardRef.current;
         if (!board) return;
-        cancelHover(); // zooming clears the hover (R2.3)
+        cancelHover();
 
-        // The page reports the pointer in page pixels. On screen, the page is scaled by zoom.
         const { zoom } = useStore.getState().camera;
         const frameRect = iframe.getBoundingClientRect();
         const boardRect = board.getBoundingClientRect();
@@ -80,18 +74,17 @@ export default function Board() {
         const dy = toPixels(data.deltaY, data.deltaMode);
 
         useStore.getState().zoomAt(px, py, Math.exp(-dy * ZOOM_SPEED));
-      }, "board"), // zooming is the board's job, so a failure here is the board's (R6.5)
+      }, "board"),
     [],
   );
 
-  // Drag on empty board space pans (R1.2). Pointer capture keeps the drag going
-  // even when the pointer moves over an iframe or outside the window.
-  // A press that barely moves is a click on empty space instead: it clears the selection (R3.3).
+  // Pointer capture keeps a drag going over iframes. A press that barely moves is
+  // a click on empty space, which clears the selection.
   const dragDistance = useRef(0);
 
   function onPointerDown(event) {
     if (event.button !== 0) return;
-    cancelHover(); // panning clears the hover (R2.3)
+    cancelHover();
     event.currentTarget.setPointerCapture(event.pointerId);
     dragDistance.current = 0;
     setPanning(true);
@@ -130,15 +123,12 @@ export default function Board() {
     <div
       ref={boardRef}
       className={panning ? "board is-panning" : "board"}
-      // inRegion: React's error boundaries don't catch errors in event handlers,
-      // so each handler fails the board itself if it throws (R6.5).
       onPointerDown={inRegion("board", null, onPointerDown)}
       onPointerMove={inRegion("board", null, onPointerMove)}
       onPointerUp={inRegion("board", null, onPointerUp)}
       onPointerCancel={inRegion("board", null, stopPanning)}
     >
-      {/* The "world": everything on the board moves together when the camera changes.
-          --zoom lets CSS keep the screen names the same size at every zoom level. */}
+      {/* One transform moves and scales everything; --zoom keeps text and lines a constant size. */}
       <div
         className="board-world"
         style={{
@@ -146,7 +136,6 @@ export default function Board() {
           "--zoom": camera.zoom,
         }}
       >
-        {/* Each preview is its own failure region (R6.1): one crashing never takes down the others. */}
         {screens.map((screen) => (
           <RegionBoundary
             key={screen.id}

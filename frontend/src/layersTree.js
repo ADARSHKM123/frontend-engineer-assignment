@@ -1,23 +1,8 @@
-// The layers tree of one preview, and small functions that change it.
-// These are "pure" functions: they take a tree and return a NEW tree, and never
-// touch messages, React or the store. That makes them easy to read and test.
-//
-// A tree looks like this:
-//   {
-//     nodes: {
-//       root: { id: "root", childIds: ["e1", "e2"], status: "loaded", hasChildren: true },
-//       e1:   { id: "e1", name: "Top nav", key: null, hasChildren: true,
-//               childIds: null,      // null = children never loaded
-//               status: "idle" },    // "idle" | "loading" | "loaded" | "error"
-//       ...
-//     },
-//     expanded: { root: true, e1: true },   // which rows are open
-//   }
-//
-// "root" is not a real element: it stands for <body>, whose children are the
-// top-level rows (R4.2). Treating it like any other node means the top level
-// loads, fails and retries with exactly the same code as every other row.
+// Pure functions on one preview's layers tree: each takes a tree and returns a new one.
+// A tree is { nodes: { [id]: { id, name, key, hasChildren, childIds, status } }, expanded: { [id]: true } }.
+// childIds is null until loaded; status is "idle" | "loading" | "loaded" | "error".
 
+// "root" stands for <body>, so the top level loads and retries like any other row.
 export const ROOT = "root";
 
 export function emptyTree() {
@@ -35,12 +20,10 @@ export function setStatus(tree, id, status) {
   return updateNode(tree, id, { status });
 }
 
-// The children of `parentId` arrived. They REPLACE whatever was there, so a
-// late or repeated answer can never add duplicates (R4.3).
+// Children REPLACE what was there, so a late or repeated answer never adds duplicates.
 export function setChildren(tree, parentId, children) {
   const nodes = { ...tree.nodes };
   for (const child of children) {
-    // Keep what we already know about a row (e.g. its own loaded children).
     nodes[child.id] = {
       childIds: null,
       status: "idle",
@@ -59,11 +42,7 @@ export function setExpanded(tree, id, isExpanded) {
   return { ...tree, expanded: { ...tree.expanded, [id]: isExpanded } };
 }
 
-// The parent of rows[index], found in the same list of visible rows: the nearest
-// row ABOVE it that is one level less deep. null for a top-level row.
-//   ▾ main          depth 0   ← parent of "Release notes"
-//       ▸ section   depth 1
-//       ▸ Release   depth 1   ← rows[index]
+// A row's parent is the nearest row above it that is one level less deep.
 export function parentRowOf(rows, index) {
   for (let i = index - 1; i >= 0; i--) {
     if (rows[i].depth === rows[index].depth - 1) return rows[i];
@@ -71,8 +50,7 @@ export function parentRowOf(rows, index) {
   return null;
 }
 
-// The rows to draw, top to bottom: every child of an expanded row, with its depth.
-// [{ id: "e1", depth: 0 }, { id: "e5", depth: 1 }, ...]
+// The rows to draw, top to bottom, as [{ id, depth }].
 export function visibleRows(tree) {
   const rows = [];
   function addChildrenOf(id, depth) {

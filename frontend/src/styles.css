@@ -20,7 +20,6 @@ body {
   background: var(--bg);
 }
 
-/* Layout: toolbar across the top, board on the left, sidebar on the right. */
 .app {
   display: grid;
   grid-template-rows: 44px 1fr;
@@ -50,11 +49,10 @@ body {
 
 .mode-toggle button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
-/* Board: the visible area. Nothing scrolls; the camera moves the world instead. */
-/* user-select: none stops a drag from text-selecting the board (and tinting the iframes). */
+/* user-select: none stops a drag from text-selecting the previews. */
 .board { position: relative; overflow: hidden; min-width: 0; min-height: 0; cursor: grab; touch-action: none; user-select: none; }
 
-/* While dragging, iframes ignore the pointer so they can't swallow the drag. */
+/* Iframes would swallow the drag otherwise. */
 .board.is-panning { cursor: grabbing; }
 .board.is-panning iframe { pointer-events: none; }
 
@@ -69,8 +67,6 @@ body {
 .board-message button { margin-top: 8px; padding: 6px 14px; cursor: pointer; }
 .muted { color: var(--muted); }
 
-/* The world is drawn at 100% size and scaled by the camera transform.
-   Previews are laid out in a 4-column grid of 1280×800 frames. */
 .board-world {
   position: absolute;
   top: 0;
@@ -83,9 +79,7 @@ body {
 
 .preview { position: relative; }
 
-/* The name sits just above the frame. The world is scaled by --zoom, so dividing
-   by --zoom cancels that out: the name is 12px on screen at every zoom level.
-   It is positioned absolutely so its changing size never moves the frames. */
+/* Dividing by --zoom cancels the board's scale, so the name stays 12px on screen. */
 .preview-name {
   position: absolute;
   bottom: 100%;
@@ -97,8 +91,7 @@ body {
   color: var(--text);
 }
 
-/* position: relative so outlines can be placed inside it with page coordinates.
-   overflow: hidden clips outlines and labels to the preview's edges (R3.4). */
+/* Outlines are placed inside in page coordinates and clipped to its edges. */
 .preview-frame {
   position: relative;
   cursor: default;
@@ -110,13 +103,9 @@ body {
 }
 .preview-frame iframe { display: block; border: 0; }
 
-/* The active preview (last clicked in Select mode) gets an accent ring, 2px on screen. */
 .preview-frame.is-active { box-shadow: 0 0 0 calc(2px / var(--zoom)) var(--accent); }
 
-/* ---- Outlines (R2.1, R3.1, R3.4) ----
-   Outlines live inside the scaled world, so every on-screen size is divided by
-   --zoom: a 1px line is 1px on screen at 25% and at 400%.
-   pointer-events: none lets the pointer pass through to the page underneath. */
+/* ---- Outlines: sizes divided by --zoom stay constant on screen ---- */
 .outline {
   position: absolute;
   pointer-events: none;
@@ -146,12 +135,10 @@ body {
   min-height: 0;
 }
 .layers, .inspector { padding: 12px; overflow: auto; color: var(--muted); }
-/* position: relative makes row.offsetTop measured from the panel, for scrolling to a row. */
-/* overflow-anchor: none, because LayersPanel keeps rows from jumping itself (R4.10). */
+/* overflow-anchor: none, because LayersPanel keeps rows from jumping itself. */
 .layers { position: relative; overflow-anchor: none; border-bottom: 1px solid var(--border); padding: 6px 0; }
 
-/* ---- Layers panel (R4) ---- */
-/* The panel takes keyboard focus for the arrow keys (R4.8); show it only for keyboard users. */
+/* ---- Layers panel ---- */
 .layers:focus { outline: none; }
 .layers:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .layers-message { margin: 0; padding: 6px 12px; }
@@ -167,12 +154,10 @@ body {
   white-space: nowrap;
 }
 .layer-row { cursor: default; user-select: none; }
-/* Hover and selection use the same colours as the outlines on the board. */
 .layer-row.is-hovered { box-shadow: inset 0 0 0 1px var(--hover); }
 .layer-row.is-selected { background: #ede9fe; }
 .layer-row.is-selected .layer-name { color: var(--selected); font-weight: 600; }
 
-/* Search (R4.11): the box stays at the top while the results scroll under it. */
 .layers-search {
   position: sticky;
   top: -6px; /* the panel's top padding */
@@ -187,10 +172,8 @@ body {
   border-radius: 6px;
   font: inherit;
 }
-/* Ancestors shown only to give a match its place in the tree. */
 .layer-row.is-dimmed .layer-name { color: var(--muted); }
 
-/* A fixed-width box, so names line up whether or not a row has a chevron. */
 .layer-chevron {
   flex: none;
   width: 16px;
@@ -209,14 +192,12 @@ body {
 .layer-error { color: #dc2626; }
 .layer-status button,
 .layers-message button { margin-left: 6px; padding: 1px 8px; font-size: 11px; cursor: pointer; }
-/* ---- Failures (R6) ---- */
-/* A region's error, shown in place of the region (board, layers, inspector). */
+/* ---- Failures ---- */
 .region-error { padding: 12px; color: var(--text); }
 .region-error p { margin: 0 0 4px; }
 .region-error button,
 .preview-failed button { margin-top: 6px; padding: 4px 12px; cursor: pointer; }
 
-/* Inside the scaled board, text is sized with / var(--zoom) to stay readable (as the names). */
 .preview-crashed {
   width: 1280px;
   height: 800px;
@@ -242,7 +223,7 @@ body {
 }
 .preview-failed p { margin: 0; }
 
-/* R6.3: "Page error" badge next to the screen name; hover shows the message. */
+/* "Page error" badge; hovering shows the message. */
 .page-error-badge {
   position: relative;
   margin-left: calc(8px / var(--zoom));
@@ -270,7 +251,7 @@ body {
 }
 .page-error-badge:hover .page-error-message { display: block; }
 
-/* ---- Dev menu (R6.7), development builds only ---- */
+/* ---- Dev menu, development builds only ---- */
 .dev-menu { position: relative; }
 .dev-menu-toggle {
   padding: 4px 10px;
@@ -311,7 +292,7 @@ body {
 .dev-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
 .dev-row select { flex: 1; }
 
-/* ---- Inspector (R5) ---- */
+/* ---- Inspector ---- */
 .inspector-message { margin: 0 0 8px; }
 .inspector-title { margin: 0 0 8px; font-size: 14px; color: var(--text); }
 .inspector-heading {

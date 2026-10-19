@@ -5,48 +5,35 @@ import Outline from "./Outline.jsx";
 import { inRegion } from "../regions.js";
 import { PAGES_ORIGIN } from "../config.js";
 
-// Used by the dev menu to make a preview fail to connect (R6.7): the pages server
-// answers 404 with a plain page that has no agent, so it never says "ready".
+// Dev menu: a page without the agent, so it never says "ready".
 const BROKEN_PAGE_URL = `${PAGES_ORIGIN}/this-page-does-not-exist.html`;
 
-// A stable empty array, so previews without a selection always get the same
-// value from the store and don't re-render.
-const NONE = [];
+const NONE = []; // stable, so previews without a selection don't re-render
 
-// Stops a press on a button inside the board from starting a board pan (R1.2),
-// which would capture the pointer and swallow the button's click.
+// A press on a button inside the board must not start a pan, which would swallow the click.
 const keepPressHere = (event) => event.stopPropagation();
 
-// One preview on the board: the screen name above a 1280×800 iframe (R1.1).
-// The iframe shows a page from http://localhost:4001, a different origin from the app,
-// so the app cannot read the page directly. It talks to the page's agent script instead.
-//
-// memo: the board re-renders on every pan/zoom step, but a preview only needs to
-// re-render when its screen changes. This keeps panning smooth with 24 iframes.
+// memo: the board re-renders on every pan or zoom step; previews don't need to.
 function Preview({ screen }) {
-  // Each selector returns a value only for this preview, so the other 23 don't re-render.
+  // Each selector returns something only for this preview, so the other 23 don't re-render.
   const hover = useStore((s) => (s.hover?.screenId === screen.id ? s.hover : null));
   const isActive = useStore((s) => s.activeScreenId === screen.id);
-  // Interact mode keeps the selection but hides it (R1.5).
+  // Interact mode keeps the selection but hides it.
   const boxes = useStore((s) =>
     s.mode === "select" && s.selection.screenId === screen.id ? s.selectionBoxes : NONE,
   );
   const connection = useStore((s) => s.connections[screen.id]);
-  // Dev menu (R6.7): this preview loads a page that doesn't exist, so it never connects.
   const broken = useStore((s) => s.dev.brokenPreview === screen.id);
   const pageError = useStore((s) => s.pageErrors[screen.id]);
 
-  // Retry makes a brand-new iframe (a new `key`), which loads the page again.
+  // Retry gives the iframe a new key, so React creates a fresh one that loads again.
   const [attempt, setAttempt] = useState(0);
 
-  // Start the 10-second connection timer whenever a new iframe is created (R6.2),
-  // and stop it when the preview goes away, so it can't fail afterwards (R6.6).
   useEffect(() => {
     startConnecting(screen.id);
     return () => stopConnecting(screen.id);
   }, [screen.id, attempt]);
 
-  // Don't draw the hover outline on top of an element that is already selected.
   const showHover = hover && !boxes.some((box) => box.id === hover.id);
 
   return (
@@ -57,7 +44,6 @@ function Preview({ screen }) {
       </div>
       <div className={isActive ? "preview-frame is-active" : "preview-frame"}>
         {connection === "failed" ? (
-          // This preview only (R6.2): the rest of the board keeps working.
           <div className="preview-failed" role="alert" onPointerDown={keepPressHere}>
             <p>Couldn't connect to this preview</p>
             <button onClick={inRegion("preview", screen.id, () => setAttempt((n) => n + 1))}>Retry</button>
@@ -73,7 +59,7 @@ function Preview({ screen }) {
               data-screen-id={screen.id}
               onLoad={inRegion("preview", screen.id, () => pageLoaded(screen.id))}
             />
-            {/* hidden: scrolled fully out of a scroll area inside the page. Still selected, no outline (R3.4). */}
+            {/* hidden = scrolled out of a scroll area inside the page: still selected, no outline. */}
             {boxes.map((box) =>
               box.hidden ? null : <Outline key={box.id} rect={box.rect} name={box.name} kind="selected" />,
             )}
@@ -85,7 +71,6 @@ function Preview({ screen }) {
   );
 }
 
-// R6.3: a small badge next to the screen name; hovering it shows the page's error.
 function PageErrorBadge({ message }) {
   return (
     <span className="page-error-badge" onPointerDown={keepPressHere}>

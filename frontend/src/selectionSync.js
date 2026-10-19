@@ -1,18 +1,10 @@
 import { useStore } from "./store.js";
 import { onAgentMessage, sendToPreview, findIframeByScreenId } from "./bridge.js";
 
-// Selection (R3). The store decides what is selected; the pages only report.
-//
-//   Page -> host:  "pick"       { id, shiftKey }    a click in Select mode (id null = background)
-//   Page -> host:  "selection"  { boxes, missing }  where the selected elements are now,
-//                                                    and which ones no longer exist (R3.7)
-//   Host -> page:  "set-selection" { ids }          which elements the page should keep measuring
-//   Host -> page:  "navigate"   { id, direction }   keyboard navigation from this element (R3.5)
-//   Page -> host:  "navigated"  { from, id }        the element found there (id null = nothing)
+// The store decides what is selected; pages only report clicks and positions.
 
-// Ask the page to move the selection with the keyboard (R3.5).
-// Acts on the most recently selected element: the last id in the list.
-// Returns false when there's nothing to navigate from, so the key keeps its normal job.
+// Keyboard navigation from the most recently selected element.
+// Returns false when nothing is selected, so the key keeps its normal job.
 export function navigateSelection(direction) {
   const { mode, selection } = useStore.getState();
   if (mode !== "select" || selection.ids.length === 0) return false;
@@ -27,9 +19,9 @@ export function navigateSelection(direction) {
 
 export function startSelectionSync() {
   onAgentMessage("navigated", (data, iframe) => {
-    if (data.id === null) return; // no child / top level: "nothing happens"
+    if (data.id === null) return;
 
-    // Only apply the answer if the selection hasn't changed while we waited.
+    // Ignore the answer if the selection changed while we waited.
     const { selection, selectOnly } = useStore.getState();
     const screenId = iframe.dataset.screenId;
     const mostRecent = selection.ids[selection.ids.length - 1];
@@ -47,22 +39,20 @@ export function startSelectionSync() {
     useStore.getState().setSelectionBoxes(iframe.dataset.screenId, data.boxes, data.missing);
   });
 
-  // The page (re)started. If it navigated, its old elements are gone: clear its selection (R3.8).
-  // If it's the first load, this also sends it an empty selection, which is harmless.
+  // A navigated page has new elements, so its old selection is cleared.
   onAgentMessage("ready", (_data, iframe) => {
     if (useStore.getState().selection.screenId === iframe.dataset.screenId) {
       useStore.getState().clearSelection();
     }
   });
 
-  // Whenever the selection changes, tell the page(s) involved which ids to measure.
+  // Tell the page(s) involved which ids to keep measuring.
   useStore.subscribe((state, previous) => {
     if (state.selection === previous.selection) return;
 
     const { screenId, ids } = state.selection;
     const before = previous.selection.screenId;
 
-    // The selection moved to another preview (or was cleared): the old page stops measuring.
     if (before && before !== screenId) {
       const oldIframe = findIframeByScreenId(before);
       if (oldIframe) sendToPreview(oldIframe, "set-selection", { ids: [] });
