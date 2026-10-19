@@ -1,6 +1,7 @@
 import { useStore } from "./store.js";
 import { onAgentMessage } from "./bridge.js";
 import { navigateSelection } from "./selectionSync.js";
+import { inRegion } from "./regions.js";
 
 // Keyboard shortcuts. Keys reach the host in two ways:
 //   1. Pressed while the host has focus: a normal keydown on the host window.
@@ -45,12 +46,16 @@ function handleShortcut({ key, shiftKey, ctrlKey, metaKey, altKey }) {
 }
 
 // Start listening. Called once when the app starts.
+// Shortcuts act on the board (mode, selection), so a failure in one is the board's (R6.5).
 export function startKeyboardShortcuts() {
-  window.addEventListener("keydown", (event) => {
-    if (isTyping(event.target)) return;
-    if (handleShortcut(event)) event.preventDefault();
-  });
+  window.addEventListener(
+    "keydown",
+    inRegion("board", null, (event) => {
+      if (isTyping(event.target)) return;
+      if (handleShortcut(event)) event.preventDefault();
+    }),
+  );
 
   // The agent already skips keys typed into the page's own text fields.
-  onAgentMessage("key", (data) => handleShortcut(data));
+  onAgentMessage("key", (data) => handleShortcut(data), "board");
 }

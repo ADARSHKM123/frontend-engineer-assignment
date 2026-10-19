@@ -1,6 +1,7 @@
 import { useStore } from "./store.js";
 import { onAgentMessage } from "./bridge.js";
 import { report } from "../report.js";
+import { inRegion } from "./regions.js";
 
 // The health of each preview (R6.2, R6.3).
 //
@@ -25,11 +26,15 @@ function startTimer(screenId) {
   clearTimeout(timers.get(screenId));
   timers.set(
     screenId,
-    setTimeout(() => {
-      timers.delete(screenId);
-      useStore.getState().setConnection(screenId, "failed");
-      report(new Error("Couldn't connect to this preview"), { region: "preview", screenId });
-    }, CONNECT_TIMEOUT_MS),
+    // inRegion: an error inside the timer fails this preview instead of being lost (R6.5).
+    setTimeout(
+      inRegion("preview", screenId, () => {
+        timers.delete(screenId);
+        useStore.getState().setConnection(screenId, "failed");
+        report(new Error("Couldn't connect to this preview"), { region: "preview", screenId });
+      }),
+      CONNECT_TIMEOUT_MS,
+    ),
   );
 }
 

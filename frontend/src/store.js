@@ -22,7 +22,7 @@ let screensRequest = null;
 export const MIN_ZOOM = 0.25;
 export const MAX_ZOOM = 4;
 
-export const useStore = create((set) => ({
+export const useStore = create((set, get) => ({
   // "select" or "interact" (R1.5)
   mode: "select",
 
@@ -85,10 +85,29 @@ export const useStore = create((set) => ({
   // The last error that happened inside each preview's page (R6.3), or nothing.
   pageErrors: {},
 
+  // Regions that failed outside rendering (R6.5): a click or key handler, a
+  // timer, a message from a page, a response. Keyed "region" or "region:screenId",
+  // e.g. "layers" or "preview:scr-02". RegionBoundary shows these exactly like a
+  // render error. Only regions.js adds to it; Retry removes it.
+  regionErrors: {},
+
   // Settings for the dev-only menu (R6.7).
   //   layersDelayMs  pages answer layers/search requests slowly
   //   crash          { region, screenId } makes that region throw while rendering
-  dev: { layersDelayMs: 0, crash: null },
+  //   failScreens    GET /screens fails (the backend's ?fail=1)
+  //   failDetails    GET /elements/:key fails
+  //   detailsDelayMs GET /elements/:key answers slowly (the backend's ?latency=)
+  //   brokenPreview  this screenId loads a page that doesn't exist, so it never connects
+  //   throwNext      { region, screenId } the next handler/timer/message in that region throws
+  dev: {
+    layersDelayMs: 0,
+    crash: null,
+    failScreens: false,
+    failDetails: false,
+    detailsDelayMs: 0,
+    brokenPreview: null,
+    throwNext: null,
+  },
 
   // Changing mode also clears the hover: Interact mode draws no outlines (R1.5).
   setMode: (mode) => set({ mode, hover: null }),
@@ -148,6 +167,15 @@ export const useStore = create((set) => ({
     set((s) => ({ pageErrors: { ...s.pageErrors, [screenId]: message } })),
 
   setDev: (changes) => set((s) => ({ dev: { ...s.dev, ...changes } })),
+
+  setRegionError: (key, error) => set((s) => ({ regionErrors: { ...s.regionErrors, [key]: error } })),
+
+  clearRegionError: (key) =>
+    set((s) => {
+      const regionErrors = { ...s.regionErrors };
+      delete regionErrors[key];
+      return { regionErrors };
+    }),
 
   setDetails: (details) => set({ details: { data: null, error: null, ...details } }),
 
@@ -219,7 +247,8 @@ export const useStore = create((set) => ({
 
     set({ screensStatus: "loading", screensError: null });
     try {
-      const screens = await getScreens({ signal: request.signal });
+      const query = get().dev.failScreens ? { fail: 1 } : undefined; // dev menu (R6.7)
+      const screens = await getScreens({ signal: request.signal, query });
       if (screensRequest !== request) return; // replaced while waiting: ignore
       set({ screens, screensStatus: "ready" });
     } catch (error) {

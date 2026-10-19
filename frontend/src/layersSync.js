@@ -2,6 +2,11 @@ import { useStore } from "./store.js";
 import { onAgentMessage, sendToPreview, findIframeByScreenId } from "./bridge.js";
 import { ROOT, setStatus, setChildren, setExpanded, visibleRows, parentRowOf } from "./layersTree.js";
 import { report } from "../report.js";
+import { inRegion } from "./regions.js";
+
+// Messages handled here belong to the layers panel: if a handler throws, the
+// panel shows the error (R6.5).
+const onLayersMessage = (type, handler) => onAgentMessage(type, handler, "layers");
 
 // Layers panel loading (R4.1-R4.3).
 //
@@ -26,7 +31,8 @@ export function loadChildren(screenId, parentId) {
   updateLayers(screenId, (tree) => setStatus(tree, parentId, "loading"));
 
   const requestId = nextRequestId++;
-  const timer = setTimeout(() => onTimeout(requestId), TIMEOUT_MS);
+  // inRegion: an error inside the timer fails the layers panel instead of being lost (R6.5).
+  const timer = setTimeout(inRegion("layers", screenId, () => onTimeout(requestId)), TIMEOUT_MS);
   pending.set(requestId, { screenId, parentId, timer });
 
   // If the iframe is missing, nothing is sent and the timer reports the failure.
@@ -187,13 +193,16 @@ function runSearch(screenId) {
   clearTimeout(searchTimers.get(screenId));
   searchTimers.set(
     screenId,
-    setTimeout(() => {
-      searchTimers.delete(screenId);
-      const current = useStore.getState().searchResults[screenId];
-      if (current?.query !== query || current.status !== "loading") return;
-      setSearchResults(screenId, { query, status: "error", rows: [] });
-      report(new Error("The page didn't answer the search within 3 seconds"), { region: "layers", screenId });
-    }, TIMEOUT_MS),
+    setTimeout(
+      inRegion("layers", screenId, () => {
+        searchTimers.delete(screenId);
+        const current = useStore.getState().searchResults[screenId];
+        if (current?.query !== query || current.status !== "loading") return;
+        setSearchResults(screenId, { query, status: "error", rows: [] });
+        report(new Error("The page didn't answer the search within 3 seconds"), { region: "layers", screenId });
+      }),
+      TIMEOUT_MS,
+    ),
   );
 
   const iframe = findIframeByScreenId(screenId);
@@ -290,7 +299,7 @@ function showActivePreview() {
 }
 
 export function startLayersSync() {
-  onAgentMessage("children", (data, iframe) => {
+  onLayersMessage("children", (data, iframe) => {
     const request = pending.get(data.requestId);
     if (!request || request.screenId !== iframe.dataset.screenId) return; // timed out or forgotten
 
@@ -311,7 +320,7 @@ export function startLayersSync() {
   // The new list replaces the old one. Rows keep their ids (the page made sure of
   // that), so open rows stay open and selected rows stay selected; removed rows
   // simply aren't in the list any more.
-  onAgentMessage("children-changed", (data, iframe) => {
+  onLayersMessage("children-changed", (data, iframe) => {
     const screenId = iframe.dataset.screenId;
     const parentId = data.parentId ?? ROOT;
     const tree = useStore.getState().layers[screenId];
@@ -330,7 +339,7 @@ export function startLayersSync() {
 
   // The page (re)started: if it navigated, its old tree is gone (R3.8).
   // The active preview reloads its top level, so the panel shows the new page.
-  onAgentMessage("ready", (_data, iframe) => {
+  onLayersMessage("ready", (_data, iframe) => {
     const screenId = iframe.dataset.screenId;
     if (!useStore.getState().layers[screenId]) return; // never loaded: nothing to forget
     forgetScreen(screenId);
@@ -338,7 +347,7 @@ export function startLayersSync() {
     if (screenId === useStore.getState().activeScreenId) searchActivePreview(); // the new page needs the query
   });
 
-  onAgentMessage("search-results", onSearchResults);
+  onLayersMessage("search-results", onSearchResults);
 
   // A new active preview: load its tree the first time it is shown (and search it, if searching).
   useStore.subscribe((state, previous) => {

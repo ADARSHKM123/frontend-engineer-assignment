@@ -4,6 +4,7 @@ import { onAgentMessage } from "../bridge.js";
 import { cancelHover } from "../hoverSync.js";
 import Preview from "./Preview.jsx";
 import RegionBoundary from "./RegionBoundary.jsx";
+import { inRegion } from "../regions.js";
 
 // How fast the wheel zooms. One mouse-wheel notch (deltaY ≈ 100) zooms about 18%.
 const ZOOM_SPEED = 0.002;
@@ -55,8 +56,10 @@ export default function Board() {
       }
     }
 
-    board.addEventListener("wheel", onWheel, { passive: false });
-    return () => board.removeEventListener("wheel", onWheel);
+    // inRegion: an error in the handler fails the board instead of being lost (R6.5).
+    const safeOnWheel = inRegion("board", null, onWheel);
+    board.addEventListener("wheel", safeOnWheel, { passive: false });
+    return () => board.removeEventListener("wheel", safeOnWheel);
   }, [status]); // the board element is only rendered once status is "ready"
 
   // Ctrl/Cmd + wheel over a preview arrives from that page's agent script (R1.3).
@@ -77,7 +80,7 @@ export default function Board() {
         const dy = toPixels(data.deltaY, data.deltaMode);
 
         useStore.getState().zoomAt(px, py, Math.exp(-dy * ZOOM_SPEED));
-      }),
+      }, "board"), // zooming is the board's job, so a failure here is the board's (R6.5)
     [],
   );
 
@@ -127,10 +130,12 @@ export default function Board() {
     <div
       ref={boardRef}
       className={panning ? "board is-panning" : "board"}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={stopPanning}
+      // inRegion: React's error boundaries don't catch errors in event handlers,
+      // so each handler fails the board itself if it throws (R6.5).
+      onPointerDown={inRegion("board", null, onPointerDown)}
+      onPointerMove={inRegion("board", null, onPointerMove)}
+      onPointerUp={inRegion("board", null, onPointerUp)}
+      onPointerCancel={inRegion("board", null, stopPanning)}
     >
       {/* The "world": everything on the board moves together when the camera changes.
           --zoom lets CSS keep the screen names the same size at every zoom level. */}

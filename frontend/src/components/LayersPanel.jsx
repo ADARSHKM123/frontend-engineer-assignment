@@ -12,8 +12,14 @@ import {
   retrySearch,
 } from "../layersSync.js";
 import { hoverRow } from "../hoverSync.js";
+import { inRegion } from "../regions.js";
 
 const NONE = [];
+
+// Every event handler in the panel runs inside the "layers" region: React's error
+// boundaries don't catch errors in event handlers, so this makes a throwing
+// handler show the panel's error and report once, like a render error (R6.5).
+const inLayers = (screenId, handler) => inRegion("layers", screenId, handler);
 
 // The layers panel (R4): the element tree of the active preview.
 // It only draws what's in the store; loading is done by layersSync.js.
@@ -60,7 +66,7 @@ export default function LayersPanel() {
       <section className="layers">
         <div className="layers-message" role="alert">
           <p>Couldn't load the layers.</p>
-          <button onClick={() => loadChildren(screenId, ROOT)}>Retry</button>
+          <button onClick={inLayers(screenId, () => loadChildren(screenId, ROOT))}>Retry</button>
         </div>
       </section>
     );
@@ -95,9 +101,9 @@ export default function LayersPanel() {
       ref={panelRef}
       tabIndex={0} // focusable, so it can receive keys; clicking a row focuses it too
       aria-label="Layers"
-      onKeyDown={onKeyDown}
+      onKeyDown={inLayers(screenId, onKeyDown)}
       // Only the tree's scroll position is remembered, not the search results' (R4.9).
-      onScroll={(event) => !searching && saveLayersScroll(screenId, event.currentTarget.scrollTop)}
+      onScroll={inLayers(screenId, (event) => !searching && saveLayersScroll(screenId, event.currentTarget.scrollTop))}
     >
       <div className="layers-search">
         <input
@@ -105,7 +111,7 @@ export default function LayersPanel() {
           placeholder="Search layers"
           aria-label="Search layers"
           value={query}
-          onChange={(event) => setSearchQuery(event.target.value)}
+          onChange={inLayers(screenId, (event) => setSearchQuery(event.target.value))}
         />
       </div>
 
@@ -137,7 +143,7 @@ function SearchStatus({ screenId, query, results }) {
     return (
       <div className="layers-message" role="alert">
         <p>Couldn't search this preview.</p>
-        <button onClick={() => retrySearch(screenId)}>Retry</button>
+        <button onClick={inLayers(screenId, () => retrySearch(screenId))}>Retry</button>
       </div>
     );
   }
@@ -236,18 +242,18 @@ function LayerRow({ screenId, node, depth, expanded, hovered, selected, inSearch
       aria-expanded={node.hasChildren && !inSearch ? expanded : undefined}
       data-row-id={node.id}
       style={{ paddingLeft: 6 + depth * 14 }}
-      onMouseEnter={() => hoverRow(screenId, node.id)}
-      onMouseLeave={() => hoverRow(screenId, null)}
-      onClick={(event) => clickRow(screenId, node.id, event.shiftKey)}
+      onMouseEnter={inLayers(screenId, () => hoverRow(screenId, node.id))}
+      onMouseLeave={inLayers(screenId, () => hoverRow(screenId, null))}
+      onClick={inLayers(screenId, (event) => clickRow(screenId, node.id, event.shiftKey))}
     >
       {node.hasChildren && !inSearch ? (
         <button
           className="layer-chevron"
           aria-label={expanded ? "Collapse" : "Expand"}
-          onClick={(event) => {
+          onClick={inLayers(screenId, (event) => {
             event.stopPropagation(); // opening a row doesn't select it
             toggleRow(screenId, node.id);
-          }}
+          })}
         >
           {expanded ? "▾" : "▸"}
         </button>
@@ -263,10 +269,10 @@ function LayerRow({ screenId, node, depth, expanded, hovered, selected, inSearch
         <span className="layer-status layer-error">
           Couldn't load
           <button
-            onClick={(event) => {
+            onClick={inLayers(screenId, (event) => {
               event.stopPropagation(); // retrying doesn't select the row
               loadChildren(screenId, node.id);
-            }}
+            })}
           >
             Retry
           </button>

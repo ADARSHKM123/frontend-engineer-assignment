@@ -1,5 +1,7 @@
 import { useStore } from "../store.js";
 import { retryDetails } from "../detailsSync.js";
+import { inRegion } from "../regions.js";
+import RegionBoundary from "./RegionBoundary.jsx";
 
 const NONE = [];
 
@@ -29,6 +31,7 @@ const LIVE_FIELDS = [
 // The inspector (R5): what's selected, read live from the page, plus its Details from the API.
 export default function Inspector() {
   const ids = useStore((s) => s.selection.ids);
+  const screenId = useStore((s) => s.selection.screenId);
   const boxes = useStore((s) => (s.selection.ids.length ? s.selectionBoxes : NONE));
   const selectionGone = useStore((s) => s.selectionGone);
 
@@ -57,8 +60,18 @@ export default function Inspector() {
         <LiveFields boxes={selected} />
       )}
 
-      {/* Details only for a single element (R5.2). */}
-      {ids.length === 1 && <DetailsSection />}
+      {/* Details only for a single element (R5.2). It's its own failure region
+          (R6.1): if it breaks, Live values still show. */}
+      {ids.length === 1 && (
+        <RegionBoundary
+          region="details"
+          screenId={screenId}
+          elementKey={selected[0]?.info.key ?? undefined}
+          label="the details"
+        >
+          <DetailsSection screenId={screenId} />
+        </RegionBoundary>
+      )}
     </section>
   );
 }
@@ -86,7 +99,7 @@ function LiveFields({ boxes }) {
 }
 
 // Details from GET /elements/:key, with every state R5.1 and R6.2 ask for.
-function DetailsSection() {
+function DetailsSection({ screenId }) {
   const details = useStore((s) => s.details);
 
   let body;
@@ -97,7 +110,7 @@ function DetailsSection() {
       <div className="inspector-error" role="alert">
         <p>Couldn't load details.</p>
         <p className="muted">{details.error}</p>
-        <button onClick={retryDetails}>Retry</button>
+        <button onClick={inRegion("details", screenId, retryDetails)}>Retry</button>
       </div>
     );
   } else if (details.status === "ready") {

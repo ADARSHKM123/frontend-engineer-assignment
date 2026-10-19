@@ -1,41 +1,56 @@
 import { Component } from "react";
 import { useStore } from "../store.js";
-import { report } from "../../report.js";
+import { failRegion, regionKey } from "../regions.js";
 
-// A failure region (R6.1). If anything inside it throws while rendering, React
-// stops at the nearest boundary and shows ITS fallback instead; everything outside
-// keeps working (R6.2). The error is reported exactly once (R6.4).
-//
-// Error boundaries must be class components: React only offers the
-// "catch an error from my children" hooks (getDerivedStateFromError and
-// componentDidCatch) on classes.
+// A failure region (R6.1). Its error and Retry replace the region, while
+// everything outside keeps working (R6.2). It shows an error in two cases:
+//   1. something inside it threw WHILE RENDERING (React catches that for us)
+//   2. regions.js recorded a failure for it from a handler, timer, message or
+//      response (R6.5): store.regionErrors
+// Both go through failRegion(), so both are reported exactly once (R6.4).
 //
 // Props:
-//   region    "board" | "preview" | "layers" | "inspector"   (passed to report())
-//   screenId  the preview this region belongs to, or null
-//   label     what to call it in the message, e.g. "the inspector"
-//   className so the fallback takes the region's place in the layout
-export default class RegionBoundary extends Component {
-  state = { error: null };
+//   region     "board" | "preview" | "layers" | "inspector" | "details"
+//   screenId   the preview this region belongs to, or null
+//   elementKey optional, passed on to report() (for Details)
+//   label      what to call it in the message, e.g. "the inspector"
+//   className  so the fallback takes the region's place in the layout
+export default function RegionBoundary(props) {
+  // Class components can't use hooks, so this small wrapper reads the store for it.
+  const key = regionKey(props.region, props.screenId);
+  const storeError = useStore((s) => s.regionErrors[key]);
+  return <Boundary {...props} storeError={storeError} errorKey={key} />;
+}
 
-  // Step 1, during rendering: remember the error, so render() shows the fallback.
-  static getDerivedStateFromError(error) {
-    return { error };
+// Error boundaries must be class components: React only offers the "catch an
+// error from my children" methods (getDerivedStateFromError, componentDidCatch)
+// on classes.
+class Boundary extends Component {
+  state = { renderError: null };
+
+  // During rendering: remember the error, so render() shows the fallback.
+  static getDerivedStateFromError(renderError) {
+    return { renderError };
   }
 
-  // Step 2, after rendering: report it. React calls this once per caught error.
+  // After rendering: record and report it, the same way as every other failure.
   componentDidCatch(error) {
-    report(error, { region: this.props.region, screenId: this.props.screenId ?? null });
+    const { region, screenId, elementKey } = this.props;
+    failRegion(region, screenId, error, elementKey ? { elementKey } : {});
   }
 
-  // Retry: forget the error and draw the children again. If they throw again,
-  // that's a new failure, caught and reported again (R6.4).
-  retry = () => this.setState({ error: null });
+  // Retry: forget the error and draw the children again. If they fail again,
+  // that's a new failure, reported again (R6.4).
+  retry = () => {
+    this.setState({ renderError: null });
+    useStore.getState().clearRegionError(this.props.errorKey);
+  };
 
   render() {
-    const { region, screenId, label, className, children } = this.props;
+    const { region, screenId, label, className, children, storeError } = this.props;
+    const error = this.state.renderError ?? storeError;
 
-    if (this.state.error) {
+    if (error) {
       return (
         // stopPropagation: inside the board, pressing Retry must not start a board pan.
         <div
@@ -44,7 +59,7 @@ export default class RegionBoundary extends Component {
           onPointerDown={(event) => event.stopPropagation()}
         >
           <p>Something went wrong in {label}.</p>
-          <p className="muted">{String(this.state.error.message)}</p>
+          <p className="muted">{String(error.message ?? error)}</p>
           <button onClick={this.retry}>Retry</button>
         </div>
       );

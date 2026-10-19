@@ -2,6 +2,12 @@ import { memo, useEffect, useState } from "react";
 import { useStore } from "../store.js";
 import { startConnecting, stopConnecting, pageLoaded } from "../previewSync.js";
 import Outline from "./Outline.jsx";
+import { inRegion } from "../regions.js";
+import { PAGES_ORIGIN } from "../config.js";
+
+// Used by the dev menu to make a preview fail to connect (R6.7): the pages server
+// answers 404 with a plain page that has no agent, so it never says "ready".
+const BROKEN_PAGE_URL = `${PAGES_ORIGIN}/this-page-does-not-exist.html`;
 
 // A stable empty array, so previews without a selection always get the same
 // value from the store and don't re-render.
@@ -26,6 +32,8 @@ function Preview({ screen }) {
     s.mode === "select" && s.selection.screenId === screen.id ? s.selectionBoxes : NONE,
   );
   const connection = useStore((s) => s.connections[screen.id]);
+  // Dev menu (R6.7): this preview loads a page that doesn't exist, so it never connects.
+  const broken = useStore((s) => s.dev.brokenPreview === screen.id);
   const pageError = useStore((s) => s.pageErrors[screen.id]);
 
   // Retry makes a brand-new iframe (a new `key`), which loads the page again.
@@ -52,18 +60,18 @@ function Preview({ screen }) {
           // This preview only (R6.2): the rest of the board keeps working.
           <div className="preview-failed" role="alert" onPointerDown={keepPressHere}>
             <p>Couldn't connect to this preview</p>
-            <button onClick={() => setAttempt((n) => n + 1)}>Retry</button>
+            <button onClick={inRegion("preview", screen.id, () => setAttempt((n) => n + 1))}>Retry</button>
           </div>
         ) : (
           <>
             <iframe
               key={attempt}
-              src={screen.url}
+              src={broken ? BROKEN_PAGE_URL : screen.url}
               title={screen.name}
               width="1280"
               height="800"
               data-screen-id={screen.id}
-              onLoad={() => pageLoaded(screen.id)}
+              onLoad={inRegion("preview", screen.id, () => pageLoaded(screen.id))}
             />
             {/* hidden: scrolled fully out of a scroll area inside the page. Still selected, no outline (R3.4). */}
             {boxes.map((box) =>
