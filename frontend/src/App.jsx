@@ -3,6 +3,7 @@ import Board from "./components/Board.jsx";
 import LayersPanel from "./components/LayersPanel.jsx";
 import Inspector from "./components/Inspector.jsx";
 import RegionBoundary from "./components/RegionBoundary.jsx";
+import DevMenu from "./components/DevMenu.jsx";
 
 // App shell: toolbar on top, board in the middle, layers and inspector on the side.
 // The board, the layers panel and the inspector are separate failure regions (R6.1):
@@ -25,6 +26,8 @@ export default function App() {
           </button>
         </div>
         <span className="zoom-level">{Math.round(zoom * 100)}%</span>
+        {/* Dev builds only (R6.7): Vite sets import.meta.env.DEV to false in production. */}
+        {import.meta.env.DEV && <DevMenu />}
       </header>
 
       <RegionBoundary region="board" label="the board" className="board">

@@ -270,6 +270,47 @@ body {
 }
 .page-error-badge:hover .page-error-message { display: block; }
 
+/* ---- Dev menu (R6.7), development builds only ---- */
+.dev-menu { position: relative; }
+.dev-menu-toggle {
+  padding: 4px 10px;
+  border: 1px dashed #f59e0b;
+  border-radius: 6px;
+  background: #fffbeb;
+  color: #92400e;
+  cursor: pointer;
+}
+.dev-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  width: 290px;
+  max-height: 80vh;
+  overflow: auto;
+  padding: 8px 12px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+.dev-menu-panel h4 { margin: 10px 0 4px; font-size: 11px; text-transform: uppercase; color: var(--muted); }
+.dev-menu-panel button {
+  display: block;
+  width: 100%;
+  margin: 3px 0;
+  padding: 4px 8px;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  cursor: pointer;
+}
+.dev-menu-panel button.is-on { border-color: #dc2626; color: #dc2626; }
+.dev-menu-panel .dev-reset { margin-top: 10px; text-align: center; font-weight: 600; }
+.dev-row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+.dev-row select { flex: 1; }
+
 /* ---- Inspector (R5) ---- */
 .inspector-message { margin: 0 0 8px; }
 .inspector-title { margin: 0 0 8px; font-size: 14px; color: var(--text); }

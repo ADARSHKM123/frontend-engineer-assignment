@@ -9,8 +9,12 @@ import { API_URL } from "./config.js";
 //
 // `signal` comes from an AbortController. When the user moves on, the caller aborts
 // the request, fetch throws an AbortError, and callers ignore it (R6.4).
-async function fetchJson(path, { signal } = {}) {
-  const res = await fetch(API_URL + path, { signal });
+//
+// `query` adds the backend's test parameters, e.g. { fail: 1 } or { latency: 2000 }.
+// Only the dev menu (R6.7) uses them.
+async function fetchJson(path, { signal, query } = {}) {
+  const search = query && Object.keys(query).length ? `?${new URLSearchParams(query)}` : "";
+  const res = await fetch(API_URL + path + search, { signal });
 
   if (res.status === 404) return { notFound: true };
   if (!res.ok) throw new Error(`Request failed: ${res.status} ${res.statusText}`);
@@ -31,8 +35,8 @@ export function isAbortError(error) {
 
 // GET /screens -> [{ id, name, url }]
 // Also checks the shape, so bad data fails here instead of somewhere in the UI.
-export async function getScreens({ signal } = {}) {
-  const { data, notFound } = await fetchJson("/screens", { signal });
+export async function getScreens({ signal, query } = {}) {
+  const { data, notFound } = await fetchJson("/screens", { signal, query });
 
   const valid =
     !notFound &&
@@ -46,8 +50,8 @@ export async function getScreens({ signal } = {}) {
 // GET /elements/:key -> { component, description, status, owner }
 // Returns { notFound: true } for a 404, which is NOT an error (R5.1).
 // Anything else that isn't four strings is bad data and becomes an error (R6.2).
-export async function getElementDetails(key, { signal } = {}) {
-  const { data, notFound } = await fetchJson(`/elements/${encodeURIComponent(key)}`, { signal });
+export async function getElementDetails(key, { signal, query } = {}) {
+  const { data, notFound } = await fetchJson(`/elements/${encodeURIComponent(key)}`, { signal, query });
   if (notFound) return { notFound: true };
 
   const fields = ["component", "description", "status", "owner"];

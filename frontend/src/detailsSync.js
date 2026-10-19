@@ -40,7 +40,11 @@ async function loadDetails(target) {
   setDetails({ status: "loading" });
 
   try {
-    const result = await getElementDetails(target.key, { signal: controller.signal });
+    const { failDetails, detailsDelayMs } = useStore.getState().dev; // dev menu (R6.7)
+    const query = {};
+    if (failDetails) query.fail = 1;
+    if (detailsDelayMs) query.latency = detailsDelayMs;
+    const result = await getElementDetails(target.key, { signal: controller.signal, query });
     if (current !== request) return; // replaced while waiting: ignore
     if (result.notFound) setDetails({ status: "notFound" }); // a 404 is not an error
     else setDetails({ status: "ready", data: result.details });
